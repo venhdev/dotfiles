@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASHRC="$HOME/.bashrc"
 MARKER="# Load dotfiles"
+
+touch "$BASHRC"
 
 if ! grep -Fq "$MARKER" "$BASHRC"; then
   cat >>"$BASHRC" <<'EOF'
@@ -17,6 +18,6 @@ done
 
 unset _cfg DOTFILES
 EOF
-fi
 
-echo "✅ Dotfiles installed: $DIR"
+  echo "✅ Added dotfiles loader to $BASHRC"
+fi
