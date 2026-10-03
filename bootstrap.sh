@@ -14,7 +14,7 @@ fi
 
 "$DIR/install.sh"
 
-echo "✅ Dotfiles $ACTION: $DIR"
+echo "Dotfiles $ACTION: $DIR"
 echo
 echo "Run below command to reload:"
 echo "source ~/.bashrc"
