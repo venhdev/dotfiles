@@ -1,3 +1,4 @@
+```bash
 #!/usr/bin/env bash
 set -e
 
@@ -11,4 +12,7 @@ sed -i '/^# Load dotfiles$/,/^unset _cfg DOTFILES$/d' "$BASHRC"
 rm -rf "$DIR"
 
 echo "✅ Dotfiles uninstalled"
-echo "→ exec bash"
+echo
+echo "Run below command to reload:"
+echo "exec bash"
+```

@@ -1,3 +1,4 @@
+```bash
 #!/usr/bin/env bash
 set -e
 
@@ -17,3 +18,4 @@ done
 
 unset _cfg DOTFILES
 EOF
+```
