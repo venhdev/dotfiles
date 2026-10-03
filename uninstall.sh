@@ -5,19 +5,10 @@ DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
 BASHRC="$HOME/.bashrc"
 
 read -rp "Uninstall dotfiles? [y/N] " a </dev/tty
-[[ $a =~ ^[Yy]$ ]] || {
-  echo "Cancelled"
-  exit 0
-}
+[[ $a =~ ^[Yy]$ ]] || { echo "Cancelled"; exit; }
 
-if [[ -f "$BASHRC" ]]; then
-  sed -i '/^# Load dotfiles$/,/^unset _cfg DOTFILES$/d' "$BASHRC"
-  echo "✅ Removed dotfiles loader from $BASHRC"
-fi
-
+sed -i '/^# Load dotfiles$/,/^unset _cfg DOTFILES$/d' "$BASHRC"
 rm -rf "$DIR"
 
 echo "✅ Dotfiles uninstalled"
-echo
-echo "Run:"
-echo "exec bash"
+echo "→ exec bash"

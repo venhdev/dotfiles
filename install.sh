@@ -6,8 +6,7 @@ MARKER="# Load dotfiles"
 
 touch "$BASHRC"
 
-if ! grep -Fq "$MARKER" "$BASHRC"; then
-  cat >>"$BASHRC" <<'EOF'
+grep -Fq "$MARKER" "$BASHRC" || cat >>"$BASHRC" <<'EOF'
 
 # Load dotfiles
 DOTFILES="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
@@ -18,6 +17,3 @@ done
 
 unset _cfg DOTFILES
 EOF
-
-  echo "✅ Added dotfiles loader to $BASHRC"
-fi
