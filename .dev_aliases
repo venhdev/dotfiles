@@ -1,9 +1,12 @@
+alias rel='source ~/.bashrc'
+alias rebash='exec bash'
+
 alias ski='npx skills add venhdev/skills'
+alias ts='date +%s'
 
 alias va='source .venv/bin/activate'
 alias vd='deactivate'
 
-alias ts='date +%s'
 
 adbls() {
   while IFS=$'\t' read -r s state model; do
