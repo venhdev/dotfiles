@@ -1,0 +1,68 @@
+alias ski='npx skills add venhdev/skills'
+
+alias va='source .venv/bin/activate'
+alias vd='deactivate'
+
+alias ts='date +%s'
+
+adbls() {
+  while IFS=$'\t' read -r s state model; do
+    printf "%-24s %-8s %s\n" "$s" "$state" "$model"
+  done < <(_adb_devices)
+}
+
+adbid() {
+  local targets apks t apk m ok=0 fail=0
+
+  mapfile -t targets < <(_adb_pick_devices)
+  ((${#targets[@]})) || { echo "❌ No device"; return 1; }
+
+  mapfile -t apks < <(_adb_pick_apks "${1:-}" "${2:-}")
+  ((${#apks[@]})) || { echo "❌ No APK"; return 1; }
+
+  echo
+  for t in "${targets[@]}"; do
+    m=$(_adb_model "$t")
+    for apk in "${apks[@]}"; do
+      echo "▶ [$m] adb -s $t install -r $apk"
+    done
+  done
+
+  _confirm || { echo "✗ cancelled"; return 1; }
+
+  for t in "${targets[@]}"; do
+    m=$(_adb_model "$t")
+    echo "── $t | $m ──"
+
+    for apk in "${apks[@]}"; do
+      _log_cmd adb -s "$t" install -r "$apk"
+      adb -s "$t" install -r "$apk" &&
+        ((++ok)) || ((++fail))
+    done
+  done
+
+  echo
+  echo "✅ $ok ok, ❌ $fail failed"
+  ((fail == 0))
+}
+
+flr() {
+  local device args=() cmd
+
+  device=$(_flutter_pick_device) ||
+    { echo "❌ No device"; return 1; }
+
+  _flutter_args args || return
+
+  cmd=(fvm flutter run -d "$device" "${args[@]}")
+  _run_confirm "${cmd[@]}"
+}
+
+flb() {
+  local target="${1:-apk}" args=(--no-tree-shake-icons) cmd
+
+  _flutter_args args || return
+
+  cmd=(fvm flutter build "$target" "${args[@]}")
+  _run_confirm "${cmd[@]}"
+}

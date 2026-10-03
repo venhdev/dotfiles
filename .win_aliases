@@ -1,0 +1,25 @@
+# Windows helpers
+
+_WIN=/mnt/c/Windows
+_CLIP="$_WIN/System32/clip.exe"
+_EXPLORER="$_WIN/explorer.exe"
+_POWERSHELL="$_WIN/System32/WindowsPowerShell/v1.0/powershell.exe"
+
+clip()       { "$_CLIP" "$@"; }
+explorer()   { "$_EXPLORER" "$@"; }
+powershell() { "$_POWERSHELL" "$@"; }
+
+winpath() {
+  wslpath -w "${1:-$PWD}"
+}
+
+opene() {
+  explorer "$(winpath "${1:-$PWD}")"
+}
+
+cpath() {
+  local p
+  p=$(winpath "${1:-$PWD}")
+  echo "Copied: $p"
+  printf '%s' "$p" | clip
+}
