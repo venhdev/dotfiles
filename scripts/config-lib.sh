@@ -1,11 +1,12 @@
 # Config helpers
 
 conf() {
+  local dotfiles="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
+
   local -A m=(
     [bashrc]="$HOME/.bashrc"
-    [ali]="$HOME/.bash_aliases"
-    [alidev]="$HOME/.dev_aliases"
-    [aliwin]="$HOME/.win_aliases"
+    [alidev]="$dotfiles/.dev_aliases"
+    [aliwin]="$dotfiles/.win_aliases"
     [ssh]="$HOME/.ssh/config"
     [env]="$HOME/.env"
     [profile]="/etc/profile"
@@ -18,7 +19,8 @@ conf() {
   )
 
   local f k="${1:-}" x l
-  for f in "$HOME"/scripts/*.sh "$HOME"/bin/*.sh; do
+
+  for f in "$dotfiles"/scripts/*.sh "$HOME"/bin/*.sh; do
     [[ -e $f ]] && m[$(basename "$f" .sh)]="$f"
   done
 
