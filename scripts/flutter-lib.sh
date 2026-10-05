@@ -80,15 +80,15 @@ _flutter_pick_mode() {
 }
 
 _flutter_args() {
-  local -n args="$1"
+  local -n out="$1"
   local f flavor mode
 
   read -rp "dart-define-from-file (skip=Enter): " f
-  [[ -n $f ]] && args+=(--dart-define-from-file="$f")
+  [[ -n $f ]] && out+=(--dart-define-from-file="$f")
 
   flavor=$(_flutter_pick_flavor) || return
-  [[ -n $flavor ]] && args+=(--flavor="$flavor")
+  [[ -n $flavor ]] && out+=(--flavor="$flavor")
 
   mode=$(_flutter_pick_mode) || return
-  args+=("--$mode")
+  out+=("--$mode")
 }
