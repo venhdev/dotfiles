@@ -5,6 +5,7 @@ conf() {
 
   local -A m=(
     [bashrc]="$HOME/.bashrc"
+    [ali]="$dotfiles/.bash_aliases"
     [alidev]="$dotfiles/.dev_aliases"
     [aliwin]="$dotfiles/.win_aliases"
     [ssh]="$HOME/.ssh/config"
