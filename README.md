@@ -3,7 +3,7 @@
 ## Install / Update
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash
 ```
 
 ## Uninstall
