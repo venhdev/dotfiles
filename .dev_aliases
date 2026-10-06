@@ -2,7 +2,7 @@ alias rel='source ~/.bashrc'
 alias rebash='exec bash'
 
 alias ski='npx skills add venhdev/skills'
-alias update-df='curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash'
+alias updf='curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash'
 alias ts='date +%s'
 
 alias va='source .venv/bin/activate'
