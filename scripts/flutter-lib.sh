@@ -79,6 +79,16 @@ _flutter_pick_mode() {
   done
 }
 
+# Default to keeping the full icon font: a tree-shaken icon font differs between
+# builds, which shows up as an asset diff in diffing tools (e.g. Shorebird patch).
+_flutter_icon_args() {
+  local -n out="$1"
+
+  if _confirm "no-tree-shake-icons? [Y/n] "; then
+    out+=(--no-tree-shake-icons)
+  fi
+}
+
 _flutter_args() {
   local -n out="$1"
   local f flavor mode

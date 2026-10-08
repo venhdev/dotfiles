@@ -62,10 +62,75 @@ flr() {
 }
 
 flb() {
-  local target="${1:-apk}" args=(--no-tree-shake-icons) cmd
+  local target="${1:-apk}" args=() cmd
 
+  _flutter_icon_args args || return
   _flutter_args args || return
 
   cmd=(fvm flutter build "$target" "${args[@]}")
+  _run_confirm "${cmd[@]}"
+}
+
+sbr() {
+  local dry_run=0
+  local artifact current flavor
+  local cmd=() args=()
+
+  [[ ${1:-} == -n ]] && dry_run=1
+
+  _shorebird_preflight || return
+  command -v fvm &>/dev/null || {
+    echo "❌ fvm not found (cần cho --flutter-version=fvm)" >&2
+    return 1
+  }
+
+  # Version is never typed here: bump pubspec.yaml first, Shorebird reads it.
+  current=$(_shorebird_version)
+  [[ -n $current ]] || {
+    echo "❌ version: not found in pubspec.yaml" >&2
+    return 1
+  }
+  echo "Version: $current"
+
+  artifact=$(_shorebird_pick Artifact apk aab apk) || return
+  flavor=$(_flutter_pick_flavor) || return
+  _flutter_icon_args args || return
+
+  cmd=(shorebird release android --flutter-version=fvm --artifact "$artifact")
+  ((dry_run)) && cmd+=(--dry-run)
+  [[ -n $flavor ]] && cmd+=(--flavor "$flavor")
+
+  _shorebird_dart_args args "$flavor" || return
+  cmd+=(-- "${args[@]}")
+
+  _run_confirm "${cmd[@]}"
+}
+
+sbp() {
+  local dry_run=0
+  local track current flavor
+  local cmd=() args=()
+
+  [[ ${1:-} == -n ]] && dry_run=1
+
+  _shorebird_preflight || return
+
+  current=$(_shorebird_version)
+  [[ -n $current ]] || {
+    echo "❌ version: not found in pubspec.yaml" >&2
+    return 1
+  }
+
+  track=$(_shorebird_pick Track staging staging stable) || return
+  flavor=$(_flutter_pick_flavor) || return
+  _flutter_icon_args args || return
+
+  cmd=(shorebird patch android --track "$track" --release-version "$current")
+  ((dry_run)) && cmd+=(--dry-run)
+  [[ -n $flavor ]] && cmd+=(--flavor "$flavor")
+
+  _shorebird_dart_args args "$flavor" || return
+  cmd+=(-- "${args[@]}")
+
   _run_confirm "${cmd[@]}"
 }
