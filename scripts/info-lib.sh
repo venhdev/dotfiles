@@ -18,36 +18,129 @@ sysinfo() {
 }
 
 envinfo() {
+  local probe_timeout_seconds="${ENVINFO_TIMEOUT_SECONDS:-2}"
+  local has_timeout=0
+  command -v timeout >/dev/null 2>&1 && has_timeout=1
+
+  _envinfo_probe() {
+    local cmd="$1"
+    local output_file output rc=0 timed_out=0
+    output_file="$(mktemp)"
+
+    (
+      eval "$cmd"
+    ) >"$output_file" 2>&1 &
+    local probe_pid=$!
+
+    if (( has_timeout )); then
+      timeout --foreground "${probe_timeout_seconds}s" bash -c 'while kill -0 "$1" 2>/dev/null; do sleep 0.05; done' _ "$probe_pid" >/dev/null 2>&1
+      if kill -0 "$probe_pid" 2>/dev/null; then
+        timed_out=1
+      fi
+    else
+      local deadline=$((SECONDS + probe_timeout_seconds))
+      while kill -0 "$probe_pid" 2>/dev/null; do
+        if (( SECONDS >= deadline )); then
+          timed_out=1
+          break
+        fi
+        sleep 0.05
+      done
+    fi
+
+    if (( timed_out )); then
+      kill "$probe_pid" 2>/dev/null
+      sleep 0.1
+      kill -9 "$probe_pid" 2>/dev/null
+      wait "$probe_pid" 2>/dev/null
+      rm -f "$output_file"
+      printf 'timeout (%ss)' "$probe_timeout_seconds"
+      return 124
+    fi
+
+    wait "$probe_pid" 2>/dev/null || rc=$?
+    output="$(cat "$output_file")"
+    rm -f "$output_file"
+
+    if (( rc != 0 )) || [[ -z "${output//[[:space:]]/}" ]]; then
+      printf 'N/A'
+      return 1
+    fi
+
+    printf '%s' "${output%%$'\n'*}"
+  }
+
+  _envinfo_print() {
+    local label="$1"
+    local cmd="$2"
+    printf '%-10s %s\n' "${label}:" "$(_envinfo_probe "$cmd")"
+  }
+
   echo "=== System ==="
-  echo "OS:      $(uname -s)"
-  echo "Kernel:  $(uname -r)"
-  echo "Arch:    $(uname -m)"
+  _envinfo_print "OS" "uname -s"
+  _envinfo_print "Kernel" "uname -r"
+  _envinfo_print "Arch" "uname -m"
+  if (( has_timeout )); then
+    _envinfo_print "Probe TTL" "printf 'timeout ${probe_timeout_seconds}s'"
+  else
+    _envinfo_print "Probe TTL" "printf 'fallback ${probe_timeout_seconds}s (timeout command not found)'"
+  fi
 
   echo
   echo "=== Node ==="
-  echo "Node:    $(node -v 2>/dev/null || echo N/A)"
-  echo "npm:     $(npm -v 2>/dev/null || echo N/A)"
-  echo "pnpm:    $(pnpm -v 2>/dev/null || echo N/A)"
-  echo "yarn:    $(yarn -v 2>/dev/null || echo N/A)"
-  echo "nvm:     $(nvm --version 2>/dev/null || echo N/A)"
+  _envinfo_print "Node" "node -v"
+  _envinfo_print "npm" "npm -v"
+  _envinfo_print "pnpm" "pnpm -v"
+  _envinfo_print "yarn" "yarn -v"
+  _envinfo_print "nvm" "command -v nvm >/dev/null 2>&1 && nvm --version"
 
   echo
   echo "=== Languages ==="
-  echo "Python:  $(python3 --version 2>/dev/null || echo N/A)"
-  echo "Go:      $(go version 2>/dev/null || echo N/A)"
-  echo "Java:    $(java -version 2>&1 | head -n 1 || echo N/A)"
+  _envinfo_print "Python" "python3 --version"
+  _envinfo_print "Go" "go version"
+  _envinfo_print "Java" "java -version"
 
   echo
-  echo "=== Containers ==="
-  echo "Docker:  $(docker --version 2>/dev/null || echo N/A)"
-  echo "Compose: $(docker compose version 2>/dev/null || echo N/A)"
+  echo "=== Search & Navigation ==="
+  _envinfo_print "rg" "rg --version"
+  if command -v fd >/dev/null 2>&1; then
+    _envinfo_print "fd" "fd --version"
+  else
+    _envinfo_print "fdfind" "fdfind --version"
+  fi
+  _envinfo_print "ast-grep" "ast-grep --version"
+  _envinfo_print "git grep" "git --version"
 
   echo
-  echo "=== Git ==="
-  echo "Git:     $(git --version 2>/dev/null || echo N/A)"
+  echo "=== File Viewing & Listing ==="
+  if command -v bat >/dev/null 2>&1; then
+    _envinfo_print "bat" "bat --version"
+  else
+    _envinfo_print "batcat" "batcat --version"
+  fi
+  _envinfo_print "eza" "eza --version"
 
   echo
-  echo "=== Editors / Tools ==="
-  echo "VSCode:  $(code --version 2>/dev/null | head -n 1 || echo N/A)"
-  echo "curl:    $(curl --version 2>/dev/null | head -n 1 || echo N/A)"
+  echo "=== Data & APIs ==="
+  _envinfo_print "jq" "jq --version"
+  _envinfo_print "yq" "yq --version"
+  _envinfo_print "sd" "sd --version"
+  _envinfo_print "curl" "curl --version"
+
+  echo
+  echo "=== Version Control & Workflow ==="
+  _envinfo_print "git" "git --version"
+  _envinfo_print "gh" "gh --version"
+  _envinfo_print "delta" "delta --version"
+  _envinfo_print "hyperfine" "hyperfine --version"
+
+  echo
+  echo "=== Containers & Infra ==="
+  _envinfo_print "docker" "docker --version"
+  _envinfo_print "compose" "docker compose version"
+  _envinfo_print "kubectl" "kubectl version --client=true"
+
+  echo
+  echo "=== Editors / Other ==="
+  _envinfo_print "VSCode" "code --version"
 }
