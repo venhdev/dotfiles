@@ -100,10 +100,15 @@ done
 unset _cfg DOTFILES
 EOF
 
-GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
-if command -v git >/dev/null 2>&1 &&
-  ! git config --global --get-all include.path | grep -Fxq "$GIT_ALIASES_FILE"; then
-  git config --global --add include.path "$GIT_ALIASES_FILE"
+GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
+OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
+if command -v git >/dev/null 2>&1; then
+  if git config --global --get-all include.path 2>/dev/null | grep -Fxq "$OLD_GIT_ALIASES_FILE"; then
+    git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
+  fi
+  if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
+    git config --global --add include.path "$GIT_CONFIG_FILE"
+  fi
 fi
 
 echo "Dotfiles $ACTION: $DIR"

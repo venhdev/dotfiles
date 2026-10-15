@@ -16,9 +16,9 @@ In non-interactive environments where prompting is not possible, the installer e
 
 ## Git aliases
 
-Installer adds `~/.config/dotfiles/.gitconfig_aliases` to global Git `include.path`, so aliases can be managed outside `~/.gitconfig`.
+Installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`, so aliases can be managed outside `~/.gitconfig`.
 
-- `git lg` → latest 10 commits (or `git lg <count>`)
+- `git lg` → latest 10 commits (or `git lg <count>`, e.g. `git lg 5` or `git lg main`)
 - `git lga` → full history
 
 ## Uninstall

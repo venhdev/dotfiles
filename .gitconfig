@@ -1,0 +1,34 @@
+[alias]
+    br = branch
+    co = checkout
+    sw = switch
+
+    st = status
+    sts = status --short
+    wt = worktree list
+    l1 = log --oneline
+    lg = "!f() { n=10; if [ \"$#\" -gt 0 ]; then case \"$1\" in [0-9]*) case \"$1\" in *[!0-9]*) ;; *) n=\"$1\"; shift ;; esac ;; -[0-9]*) case \"${1#-}\" in *[!0-9]*) ;; *) n=\"${1#-}\"; shift ;; esac ;; esac; fi; git log --graph --oneline --all --decorate --color -n \"$n\" \"$@\"; }; f"
+    lga = log --graph --oneline --all --decorate --color
+    sh = show --shortstat
+    df = "!f() { git diff --stat HEAD~${1:-1}; }; f"
+    dfs = "!f() { git diff --shortstat HEAD~${1:-1}; }; f"
+
+    fe = fetch --all
+    mergenn = merge --no-commit --no-ff
+    mergeff = merge --ff-only
+    rmc = rm -r --cached
+
+    cm = commit
+    cmall = "!f() { git add -A && git commit -m \"$1\"; }; f"
+    cmm = commit -m
+    cma = commit --amend --no-edit
+    cmam = commit --amend -m
+    cont = commit --no-edit # continue mergenn
+
+    aa = add -A
+    pfwl = push --force-with-lease
+    pd = push -u origin HEAD
+
+    undo = "!f() { git reset --soft HEAD~${1:-1}; }; f"
+    addpush = "!f() { git add -A && git commit -m \"$1\" && git push; }; f"
+    inf = "!f() { echo \"🧷 BRANCH: $(git branch --show-current 2>/dev/null || echo '-')\"; echo \"🔥 STATUS:\"; git status -sb; echo; echo \"🌐 REMOTES:\"; git remote -v; echo; echo \"🕒 LAST COMMITS:\"; git log --oneline --decorate -5; }; f"
