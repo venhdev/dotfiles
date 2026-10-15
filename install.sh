@@ -100,6 +100,12 @@ done
 unset _cfg DOTFILES
 EOF
 
+GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
+if command -v git >/dev/null 2>&1 &&
+  ! git config --global --get-all include.path | grep -Fxq "$GIT_ALIASES_FILE"; then
+  git config --global --add include.path "$GIT_ALIASES_FILE"
+fi
+
 echo "Dotfiles $ACTION: $DIR"
 echo
 echo "Run below command to reload:"
