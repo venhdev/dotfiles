@@ -1,6 +1,8 @@
 # Editor helpers
 
-if command -v micro &>/dev/null; then
+if [[ -n ${DOTFILES_EDITOR:-} ]] && command -v "$DOTFILES_EDITOR" &>/dev/null; then
+  export EDITOR="$DOTFILES_EDITOR"
+elif command -v micro &>/dev/null; then
   export EDITOR=micro
 elif command -v nano &>/dev/null; then
   export EDITOR=nano

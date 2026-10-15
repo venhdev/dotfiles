@@ -2,3 +2,8 @@
 *.pem
 *.key
 *.secret
+.agents/
+skills-lock.json
+/local/
+/enabled.d/
+

@@ -1,3 +1,20 @@
+# Base system, navigation, dev, and package management aliases
+
+# ENVIRONMENT & RELOAD
+alias rel='source ~/.bashrc'
+alias rebash='exec bash'
+alias updf='curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash'
+alias ts='date +%s'
+
+# PYTHON VENV
+alias va='source .venv/bin/activate'
+alias vd='deactivate'
+
+# SKILLS CLI
+alias ski='npx skills add'
+alias skiv='npx skills add venhdev/skills'
+alias skiu='npx skills remove'
+
 # TOOLS
 alias claudebypass='claude --dangerously-skip-permissions'
 alias clpp=claudebypass
@@ -5,10 +22,9 @@ alias pn='pnpm'
 alias ocwatch='pn openclaw setup && pn gateway:watch'
 alias ocstop='pn openclaw gateway stop'
 
-# System control (`-u`, `cat` type manually)
+# SYSTEM CONTROL
 alias sc='systemctl'
 alias scu='systemctl --user'
-
 alias scr='sudo systemctl restart'
 alias scs='systemctl status'
 alias sce='sudo systemctl enable --now'
@@ -16,7 +32,7 @@ alias scd='sudo systemctl disable --now'
 alias scdr='sudo systemctl daemon-reload'
 alias scedit='sudo systemctl edit --full'
 
-## Journal
+# JOURNAL
 alias jc='journalctl'
 alias jcs='journalctl -u'
 alias jcf='journalctl -f -u'
@@ -42,16 +58,13 @@ alias ...='cd ../..'
 alias ll='ls -haltF' # Long list, hidden files, human sizes
 alias la='ls -A'
 alias l='ls -CF'
-alias lsize='ls -lSrh'           # Sort by size, largest at bottom
+alias lsize='ls -lSrh' # Sort by size, largest at bottom
 alias h='history | grep'
 alias cls='clear'
 
 alias cx='chmod +x'
 alias chownme='sudo chown -R $USER:$USER'
 
-## Some more alias to avoid making mistakes:
-# alias cp='cp -i'
-# alias mv='mv -i'
 alias rm='rm -i'
 alias rmf='rm -rf'
 

@@ -5,13 +5,13 @@ conf() {
 
   local -A m=(
     [bashrc]="$HOME/.bashrc"
-    [ali]="$dotfiles/.bash_aliases"
-    [alidev]="$dotfiles/.dev_aliases"
-    [aliwin]="$dotfiles/.win_aliases"
+    [ali]="$dotfiles/core/10-base-aliases.sh"
+    [localenv]="$dotfiles/local/local.env"
     [ssh]="$HOME/.ssh/config"
     [env]="$HOME/.env"
     [profile]="/etc/profile"
     [git]="$HOME/.gitconfig"
+    [gitdot]="$dotfiles/.gitconfig"
     [claude]="$HOME/.claude/settings.json"
     [codex]="$HOME/.codex/config.toml"
     [docker]="$HOME/.docker/config.json"
@@ -21,7 +21,7 @@ conf() {
 
   local f k="${1:-}" x l
 
-  for f in "$dotfiles"/scripts/*.sh "$HOME"/bin/*.sh; do
+  for f in "$dotfiles"/core/*.sh "$dotfiles"/modules/*/*.sh "$HOME"/bin/*.sh; do
     [[ -e $f ]] && m[$(basename "$f" .sh)]="$f"
   done
 

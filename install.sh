@@ -2,9 +2,27 @@
 set -e
 
 REPO="https://github.com/venhdev/dotfiles.git"
-DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
-BASHRC="$HOME/.bashrc"
+DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
+BASHRC="${DOTFILES_BASHRC:-$HOME/.bashrc}"
 MARKER="# Load dotfiles"
+
+# Parse CLI arguments
+OPT_ALL=0
+for arg in "$@"; do
+  case "$arg" in
+    -a|--all)
+      OPT_ALL=1
+      ;;
+    -h|--help)
+      echo "Usage: ./install.sh [OPTIONS]"
+      echo
+      echo "Options:"
+      echo "  -a, --all    Install all modules with defaults (non-interactive)"
+      echo "  -h, --help   Show this help message"
+      exit 0
+      ;;
+  esac
+done
 
 is_worktree_dirty() {
   [[ -n "$(git -C "$DIR" status --porcelain)" ]]
@@ -42,6 +60,7 @@ prompt_yes_no() {
   done
 }
 
+# 1. Update or clone repository
 if [[ -d "$DIR/.git" ]]; then
   if pull_output="$(git -C "$DIR" pull --ff-only 2>&1)"; then
     [ -n "$pull_output" ] && printf '%s\n' "$pull_output"
@@ -82,24 +101,232 @@ if [[ -d "$DIR/.git" ]]; then
     fi
   fi
 else
-  git clone "$REPO" "$DIR"
-  ACTION=installed
+  # If running in local checkout not at $DIR, copy or clone
+  if [[ ! -d "$DIR" ]]; then
+    git clone "$REPO" "$DIR"
+    ACTION=installed
+  else
+    ACTION=updated
+  fi
 fi
 
+# 2. Existing local config detection
+existing_ssh_init=""
+existing_win_path=""
+if [[ -f "$DIR/local/local.env" ]]; then
+  existing_ssh_init="$(grep -E '^export DOTFILES_SSH_INIT=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
+  existing_win_path="$(grep -E '^export DOTFILES_WIN_PATH=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
+fi
+
+auto_key="$(find "$HOME/.ssh" -maxdepth 1 -type f \( -name "*_ed25519" -o -name "*_rsa" \) 2>/dev/null | head -n1 || true)"
+default_ssh="${existing_ssh_init:-${auto_key:-$HOME/.ssh/id_ed25519}}"
+default_win="${existing_win_path:-/mnt/c/Windows}"
+
+# Module definitions:
+# index 0: [ALL]
+# index 1: ssh
+# index 2: wsl
+# index 3: mobile
+modules=("ALL" "ssh" "wsl" "mobile")
+menu_labels=(
+  "[ALL] Select / Deselect all modules"
+  "ssh    - SSH Manager (Auto ssh-agent & SSH key loading)"
+  "wsl    - WSL Integration (clip, explorer, winpath)"
+  "mobile - Mobile Dev (Flutter, Shorebird, Android ADB tools)"
+)
+num_items=${#modules[@]}
+selected=(0 0 0 0)
+
+# Pre-select initial state based on environment or existing symlinks
+if [[ -L "$DIR/enabled.d/50-ssh.sh" ]]; then
+  selected[1]=1
+elif [[ -n "$auto_key" ]]; then
+  selected[1]=1
+fi
+
+if [[ -L "$DIR/enabled.d/50-wsl.sh" ]]; then
+  selected[2]=1
+elif grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+  selected[2]=1
+fi
+
+if [[ -L "$DIR/enabled.d/50-mobile.sh" ]]; then
+  selected[3]=1
+fi
+
+toggle_all() {
+  local all_on=1
+  for ((idx=1; idx<num_items; idx++)); do
+    (( selected[idx] == 0 )) && { all_on=0; break; }
+  done
+  for ((idx=1; idx<num_items; idx++)); do
+    selected[idx]=$(( 1 - all_on ))
+  done
+}
+
+# 3. Interactive Selection or Non-interactive Fallback
+ssh_init_val="$default_ssh"
+win_path_val="$default_win"
+
+if (( OPT_ALL )); then
+  for ((idx=1; idx<num_items; idx++)); do
+    selected[idx]=1
+  done
+elif can_prompt_interactively; then
+  tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
+  restore_cursor() {
+    tput cnorm >/dev/tty 2>/dev/null || printf "\033[?25h" >/dev/tty
+  }
+  trap restore_cursor EXIT INT TERM
+
+  cursor=0
+  while true; do
+    printf "\033[H\033[2J" >/dev/tty
+    printf "\033[1;36m=== DOTFILES MODULE SELECTOR ===\033[0m\n" >/dev/tty
+    printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [a] Toggle All | [Enter] Confirm\033[0m\n\n" >/dev/tty
+
+    total_selected=0
+    for ((i=1; i<num_items; i++)); do
+      if (( selected[i] )); then
+        total_selected=$((total_selected + 1))
+      fi
+    done
+
+    all_mark=" "
+    if (( total_selected == num_items - 1 )); then
+      all_mark="*"
+    elif (( total_selected > 0 )); then
+      all_mark="-"
+    fi
+
+    for ((i=0; i<num_items; i++)); do
+      mark=" "
+      if (( i == 0 )); then
+        mark="$all_mark"
+      else
+        (( selected[i] )) && mark="x"
+      fi
+
+      if (( i == cursor )); then
+        printf " \033[1;32m> [%s] %s\033[0m\n" "$mark" "${menu_labels[i]}" >/dev/tty
+      else
+        printf "   [%s] %s\n" "$mark" "${menu_labels[i]}" >/dev/tty
+      fi
+    done
+    printf "\n" >/dev/tty
+
+    IFS= read -rsn1 key < /dev/tty
+    if [[ $key == $'\x1b' ]]; then
+      read -rsn2 -t 0.1 seq < /dev/tty || true
+      case "$seq" in
+        "[A"|"OA") if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((num_items - 1)); fi ;;
+        "[B"|"OB") if ((cursor < num_items - 1)); then cursor=$((cursor + 1)); else cursor=0; fi ;;
+      esac
+    elif [[ $key == "k" || $key == "K" ]]; then
+      if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((num_items - 1)); fi
+    elif [[ $key == "j" || $key == "J" ]]; then
+      if ((cursor < num_items - 1)); then cursor=$((cursor + 1)); else cursor=0; fi
+    elif [[ $key == "a" || $key == "A" ]]; then
+      toggle_all
+    elif [[ $key == " " ]]; then
+      if (( cursor == 0 )); then
+        toggle_all
+      else
+        selected[cursor]=$(( 1 - selected[cursor] ))
+      fi
+    elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
+      break
+    fi
+  done
+  restore_cursor
+  trap - EXIT INT TERM
+
+  # Dynamic Configuration Prompts
+  if (( selected[1] || selected[2] )); then
+    printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
+
+    if (( selected[1] )); then
+      printf "SSH key path to auto-load (Enter for default) [%s]: " "$default_ssh" >/dev/tty
+      IFS= read -r input_ssh < /dev/tty
+      ssh_init_val="${input_ssh:-$default_ssh}"
+    fi
+
+    if (( selected[2] )); then
+      printf "Windows system path [%s]: " "$default_win" >/dev/tty
+      IFS= read -r input_win < /dev/tty
+      win_path_val="${input_win:-$default_win}"
+    fi
+  fi
+
+  # Summary and Confirmation
+  printf "\n\033[1;36m================ INSTALLATION SUMMARY ================\033[0m\n" >/dev/tty
+  printf " Core: shell-lib, base-aliases, editor-lib, config-lib, info-lib (Always enabled)\n" >/dev/tty
+  printf " Modules:\n" >/dev/tty
+  if (( selected[1] )); then
+    printf "   \033[1;32m[✔] ssh\033[0m    -> Key: %s\n" "$ssh_init_val" >/dev/tty
+  else
+    printf "   \033[90m[ ] ssh    -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[2] )); then
+    printf "   \033[1;32m[✔] wsl\033[0m    -> WinPath: %s\n" "$win_path_val" >/dev/tty
+  else
+    printf "   \033[90m[ ] wsl    -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[3] )); then
+    printf "   \033[1;32m[✔] mobile\033[0m -> Flutter, Shorebird, ADB tools enabled\n" >/dev/tty
+  else
+    printf "   \033[90m[ ] mobile -> Disabled\033[0m\n" >/dev/tty
+  fi
+  printf "\n" >/dev/tty
+
+  if ! prompt_yes_no "Proceed with installation?"; then
+    echo "Installation cancelled." >&2
+    exit 1
+  fi
+fi
+
+# 4. Apply Configuration and Setup Symlinks
+mkdir -p "$DIR/local" "$DIR/enabled.d"
+
+# Write local.env
+cat > "$DIR/local/local.env.tmp" <<EOF
+# Machine-specific local configuration (managed by dotfiles install.sh)
+export DOTFILES_SSH_INIT="${ssh_init_val}"
+export DOTFILES_WIN_PATH="${win_path_val}"
+EOF
+chmod 600 "$DIR/local/local.env.tmp"
+mv "$DIR/local/local.env.tmp" "$DIR/local/local.env"
+
+# Sync symlinks in enabled.d
+rm -f "$DIR/enabled.d"/50-*.sh
+(( selected[1] )) && ln -sfn "../modules/ssh/module.sh" "$DIR/enabled.d/50-ssh.sh"
+(( selected[2] )) && ln -sfn "../modules/wsl/module.sh" "$DIR/enabled.d/50-wsl.sh"
+(( selected[3] )) && ln -sfn "../modules/mobile/module.sh" "$DIR/enabled.d/50-mobile.sh"
+
+# 5. Update ~/.bashrc
 touch "$BASHRC"
 
-grep -Fq "$MARKER" "$BASHRC" || cat >>"$BASHRC" <<'EOF'
+if grep -Fq "$MARKER" "$BASHRC"; then
+  sed -i '/^# Load dotfiles$/,/^unset _\(cfg\|f\) DOTFILES$/d' "$BASHRC"
+fi
+
+cat >>"$BASHRC" <<'EOF'
 
 # Load dotfiles
 DOTFILES="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
 
-for _cfg in "$DOTFILES"/.*_aliases "$DOTFILES"/scripts/*.sh "$HOME/.env"; do
-  [ -r "$_cfg" ] && . "$_cfg"
+[ -r "$DOTFILES/local/local.env" ] && . "$DOTFILES/local/local.env"
+
+for _f in "$DOTFILES"/core/*.sh "$DOTFILES"/enabled.d/*.sh "$HOME/.env"; do
+  [ -r "$_f" ] && . "$_f"
 done
 
-unset _cfg DOTFILES
+unset _f DOTFILES
 EOF
 
+# 6. Global Git Configuration
 GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
 OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
 if command -v git >/dev/null 2>&1; then
@@ -111,7 +338,8 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-echo "Dotfiles $ACTION: $DIR"
+echo
+echo "Dotfiles $ACTION successfully: $DIR"
 echo
 echo "Run below command to reload:"
 echo "source ~/.bashrc"

@@ -1,6 +1,6 @@
 # SSH helpers
 
-SSH_INIT="$HOME/.ssh/wsldebian_pc_ed25519"
+SSH_INIT="${DOTFILES_SSH_INIT:-$HOME/.ssh/id_ed25519}"
 
 ssha() {
   [[ -z $SSH_AUTH_SOCK ]] && eval "$(ssh-agent -s)" >/dev/null
@@ -19,7 +19,8 @@ ssha() {
   done
 }
 
-[[ -f $SSH_INIT ]] && {
+if [[ -n $SSH_INIT && -f $SSH_INIT ]]; then
   [[ -z $SSH_AUTH_SOCK ]] && eval "$(ssh-agent -s)" >/dev/null
   ssh-add "$SSH_INIT" &>/dev/null
-}
+fi
+
