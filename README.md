@@ -14,6 +14,13 @@ git -C "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles" stash pop
 
 In non-interactive environments where prompting is not possible, the installer exits with a clear error instead of forcing or hanging.
 
+## Git aliases
+
+Installer adds `~/.config/dotfiles/.gitconfig_aliases` to global Git `include.path`, so aliases can be managed outside `~/.gitconfig`.
+
+- `git lg` → latest 10 commits (or `git lg <count>`)
+- `git lga` → full history
+
 ## Uninstall
 
 ```bash
