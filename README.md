@@ -34,6 +34,7 @@ curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | 
 - `[Space]`: Toggle selected module
 - `[a]`: Toggle all modules
 - `[Enter]`: Confirm and proceed to configuration
+- `[q]` or `[Ctrl+C]`: Cancel installation
 
 The installer will auto-detect sensible defaults (e.g. detecting WSL or scanning `~/.ssh/` for key candidates) and prompt for any dynamic module settings.
 

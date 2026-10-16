@@ -60,6 +60,19 @@ prompt_yes_no() {
   done
 }
 
+restore_cursor() {
+  tput cnorm >/dev/tty 2>/dev/null || printf "\033[?25h" >/dev/tty 2>/dev/null || true
+}
+
+handle_cancel() {
+  restore_cursor
+  printf "\n\033[90mInstallation cancelled.\033[0m\n" >/dev/tty 2>/dev/null || printf "\nInstallation cancelled.\n"
+  exit 130
+}
+
+trap restore_cursor EXIT
+trap handle_cancel INT TERM
+
 # 1. Update or clone repository
 if [[ -d "$DIR/.git" ]]; then
   if pull_output="$(git -C "$DIR" pull --ff-only 2>&1)"; then
@@ -140,15 +153,17 @@ default_win="${existing_win_path:-/mnt/c/Windows}"
 # index 1: ssh
 # index 2: wsl
 # index 3: mobile
-modules=("ALL" "ssh" "wsl" "mobile")
+# index 4: gitconfig
+modules=("ALL" "ssh" "wsl" "mobile" "gitconfig")
 menu_labels=(
   "[ALL] Select / Deselect all modules"
-  "ssh    - SSH Manager (Auto ssh-agent & SSH key loading)"
-  "wsl    - WSL Integration (clip, explorer, winpath)"
-  "mobile - Mobile Dev (Flutter, Shorebird, Android ADB tools)"
+  "ssh       - SSH Manager (Auto ssh-agent & SSH key loading)"
+  "wsl       - WSL Integration (clip, explorer, winpath)"
+  "mobile    - Mobile Dev (Flutter, Shorebird, Android ADB tools)"
+  "gitconfig - Git Aliases & Config (lg, lga, inf, br, co, ...)"
 )
 num_items=${#modules[@]}
-selected=(0 0 0 0)
+selected=(0 0 0 0 0)
 
 # Pre-select initial state based on environment or existing symlinks
 if [[ -L "$DIR/enabled.d/50-ssh.sh" ]]; then
@@ -165,6 +180,14 @@ fi
 
 if [[ -L "$DIR/enabled.d/50-mobile.sh" ]]; then
   selected[3]=1
+fi
+
+GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
+OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
+if git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
+  selected[4]=1
+elif command -v git >/dev/null 2>&1; then
+  selected[4]=1
 fi
 
 toggle_all() {
@@ -187,16 +210,12 @@ if (( OPT_ALL )); then
   done
 elif can_prompt_interactively; then
   tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
-  restore_cursor() {
-    tput cnorm >/dev/tty 2>/dev/null || printf "\033[?25h" >/dev/tty
-  }
-  trap restore_cursor EXIT INT TERM
 
   cursor=0
   while true; do
     printf "\033[H\033[2J" >/dev/tty
     printf "\033[1;36m=== DOTFILES MODULE SELECTOR ===\033[0m\n" >/dev/tty
-    printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [a] Toggle All | [Enter] Confirm\033[0m\n\n" >/dev/tty
+    printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [a] Toggle All | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
 
     total_selected=0
     for ((i=1; i<num_items; i++)); do
@@ -247,12 +266,13 @@ elif can_prompt_interactively; then
       else
         selected[cursor]=$(( 1 - selected[cursor] ))
       fi
+    elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
+      handle_cancel
     elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
       break
     fi
   done
   restore_cursor
-  trap - EXIT INT TERM
 
   # Dynamic Configuration Prompts
   if (( selected[1] || selected[2] )); then
@@ -281,14 +301,13 @@ elif can_prompt_interactively; then
         fi
 
         tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
-        trap restore_cursor EXIT INT TERM
 
         while true; do
           printf "\033[H\033[2J" >/dev/tty
           printf "\033[1;36m=== DOTFILES CONFIGURATION ===\033[0m\n" >/dev/tty
           printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
           printf "Select an SSH key to auto-load on shell startup:\n" >/dev/tty
-          printf "\033[90m[↑/↓] Navigate | [Enter] Confirm\033[0m\n\n" >/dev/tty
+          printf "\033[90m[↑/↓] Navigate | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
 
           for ((i=0; i<ssh_item_count; i++)); do
             if (( i == ssh_cursor )); then
@@ -310,12 +329,13 @@ elif can_prompt_interactively; then
             if ((ssh_cursor > 0)); then ssh_cursor=$((ssh_cursor - 1)); else ssh_cursor=$((ssh_item_count - 1)); fi
           elif [[ $key == "j" || $key == "J" ]]; then
             if ((ssh_cursor < ssh_item_count - 1)); then ssh_cursor=$((ssh_cursor + 1)); else ssh_cursor=0; fi
+          elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
+            handle_cancel
           elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
             break
           fi
         done
         restore_cursor
-        trap - EXIT INT TERM
 
         if (( ssh_cursor < num_detected )); then
           ssh_init_val="${detected_ssh_keys[ssh_cursor]}"
@@ -362,9 +382,15 @@ elif can_prompt_interactively; then
   fi
 
   if (( selected[3] )); then
-    printf "   \033[1;32m[✔] mobile\033[0m -> Flutter, Shorebird, ADB tools enabled\n" >/dev/tty
+    printf "   \033[1;32m[✔] mobile\033[0m    -> Flutter, Shorebird, ADB tools enabled\n" >/dev/tty
   else
-    printf "   \033[90m[ ] mobile -> Disabled\033[0m\n" >/dev/tty
+    printf "   \033[90m[ ] mobile    -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[4] )); then
+    printf "   \033[1;32m[✔] gitconfig\033[0m -> Git Aliases & Config (include.path enabled)\n" >/dev/tty
+  else
+    printf "   \033[90m[ ] gitconfig -> Disabled\033[0m\n" >/dev/tty
   fi
   printf "\n" >/dev/tty
 
@@ -417,11 +443,13 @@ EOF
 GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
 OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
 if command -v git >/dev/null 2>&1; then
-  if git config --global --get-all include.path 2>/dev/null | grep -Fxq "$OLD_GIT_ALIASES_FILE"; then
-    git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
-  fi
-  if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
-    git config --global --add include.path "$GIT_CONFIG_FILE"
+  git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
+  if (( selected[4] )); then
+    if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
+      git config --global --add include.path "$GIT_CONFIG_FILE"
+    fi
+  else
+    git config --global --unset-all include.path "$GIT_CONFIG_FILE" 2>/dev/null || true
   fi
 fi
 
