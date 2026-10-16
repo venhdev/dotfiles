@@ -153,17 +153,21 @@ default_win="${existing_win_path:-/mnt/c/Windows}"
 # index 1: ssh
 # index 2: wsl
 # index 3: mobile
-# index 4: gitconfig
-modules=("ALL" "ssh" "wsl" "mobile" "gitconfig")
+# index 4: docker
+# index 5: ai
+# index 6: gitconfig
+modules=("ALL" "ssh" "wsl" "mobile" "docker" "ai" "gitconfig")
 menu_labels=(
   "[ALL] Select / Deselect all modules"
   "ssh       - SSH Manager (Auto ssh-agent & SSH key loading)"
-  "wsl       - WSL Integration (clip, explorer, winpath)"
+  "wsl       - WSL Integration (clip, explorer, winpath, wcp)"
   "mobile    - Mobile Dev (Flutter, Shorebird, Android ADB tools)"
+  "docker    - Docker Shortcuts (dps, dcl cleanup)"
+  "ai        - AI & Agent Tools (Claude, OpenClaw, Skills CLI)"
   "gitconfig - Git Aliases & Config (lg, lga, inf, br, co, ...)"
 )
 num_items=${#modules[@]}
-selected=(0 0 0 0 0)
+selected=(0 0 0 0 0 0 0)
 
 # Pre-select initial state based on environment or existing symlinks
 if [[ -L "$DIR/enabled.d/50-ssh.sh" ]]; then
@@ -182,12 +186,24 @@ if [[ -L "$DIR/enabled.d/50-mobile.sh" ]]; then
   selected[3]=1
 fi
 
+if [[ -L "$DIR/enabled.d/50-docker.sh" ]]; then
+  selected[4]=1
+elif command -v docker >/dev/null 2>&1; then
+  selected[4]=1
+fi
+
+if [[ -L "$DIR/enabled.d/50-ai.sh" ]]; then
+  selected[5]=1
+elif command -v claude >/dev/null 2>&1 || [[ -d "$HOME/.openclaw" || -d "$HOME/.claude" ]]; then
+  selected[5]=1
+fi
+
 GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
 OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
 if git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
-  selected[4]=1
+  selected[6]=1
 elif command -v git >/dev/null 2>&1; then
-  selected[4]=1
+  selected[6]=1
 fi
 
 toggle_all() {
@@ -388,6 +404,18 @@ elif can_prompt_interactively; then
   fi
 
   if (( selected[4] )); then
+    printf "   \033[1;32m[✔] docker\033[0m    -> Docker shortcuts enabled\n" >/dev/tty
+  else
+    printf "   \033[90m[ ] docker    -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[5] )); then
+    printf "   \033[1;32m[✔] ai\033[0m        -> Claude, OpenClaw, Skills CLI enabled\n" >/dev/tty
+  else
+    printf "   \033[90m[ ] ai        -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[6] )); then
     printf "   \033[1;32m[✔] gitconfig\033[0m -> Git Aliases & Config (include.path enabled)\n" >/dev/tty
   else
     printf "   \033[90m[ ] gitconfig -> Disabled\033[0m\n" >/dev/tty
@@ -417,6 +445,8 @@ rm -f "$DIR/enabled.d"/50-*.sh
 (( selected[1] )) && ln -sfn "../modules/ssh/module.sh" "$DIR/enabled.d/50-ssh.sh"
 (( selected[2] )) && ln -sfn "../modules/wsl/module.sh" "$DIR/enabled.d/50-wsl.sh"
 (( selected[3] )) && ln -sfn "../modules/mobile/module.sh" "$DIR/enabled.d/50-mobile.sh"
+(( selected[4] )) && ln -sfn "../modules/docker/module.sh" "$DIR/enabled.d/50-docker.sh"
+(( selected[5] )) && ln -sfn "../modules/ai/module.sh" "$DIR/enabled.d/50-ai.sh"
 
 # 5. Update ~/.bashrc
 touch "$BASHRC"
@@ -444,7 +474,7 @@ GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
 OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
 if command -v git >/dev/null 2>&1; then
   git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
-  if (( selected[4] )); then
+  if (( selected[6] )); then
     if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
       git config --global --add include.path "$GIT_CONFIG_FILE"
     fi

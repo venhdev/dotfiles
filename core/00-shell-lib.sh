@@ -29,23 +29,6 @@ showfunc() {
   fi
 }
 
-wcp() {
-  (($# == 2)) || {
-    echo "Usage: wcp <src> <dst>"
-    return 1
-  }
-
-  local src="$1" dst="$2"
-
-  [[ $src =~ ^[A-Za-z]:[\\/].* ]] && src=$(wslpath -u "$src")
-  [[ $dst =~ ^[A-Za-z]:[\\/].* ]] && dst=$(wslpath -u "$dst")
-
-  echo "$src → $dst"
-  _confirm "Confirm? [Y/n] " || return 1
-
-  cp "$src" "$dst"
-}
-
 
 # Common shell helpers
 

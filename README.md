@@ -8,14 +8,16 @@ A fast, modular, zero-dependency dotfiles system for Linux and WSL with an inter
 dotfiles/
 ├── core/                        # Always loaded
 │   ├── 00-shell-lib.sh          # Utilities (_confirm, _log_cmd, pickers)
-│   ├── 10-base-aliases.sh       # Base aliases (nav, apt, docker, systemctl)
+│   ├── 10-base-aliases.sh       # Base aliases (nav, systemctl, safe apt)
 │   ├── 20-editor-lib.sh         # Auto-detect or configured EDITOR
 │   ├── 30-config-lib.sh         # Quick config opener (conf)
 │   └── 40-info-lib.sh           # Diagnostics (sysinfo, envinfo)
 ├── modules/                     # Optional modules
 │   ├── ssh/                     # SSH agent & auto-load key
-│   ├── wsl/                     # Windows WSL integration (clip, winpath, explorer)
-│   └── mobile/                  # Flutter, Shorebird, Android ADB tools
+│   ├── wsl/                     # Windows WSL integration (clip, winpath, explorer, wcp)
+│   ├── mobile/                  # Flutter, Shorebird, Android ADB tools
+│   ├── docker/                  # Docker CLI shortcuts (dps, dcl)
+│   └── ai/                      # AI & Agent CLI helpers (Claude, OpenClaw, Skills)
 ├── enabled.d/                   # Symlinks to active modules (git-ignored)
 └── local/                       # Machine-specific config (git-ignored)
     └── local.env                # Local environment variables (DOTFILES_SSH_INIT, etc.)

@@ -10,18 +10,6 @@ alias ts='date +%s'
 alias va='source .venv/bin/activate'
 alias vd='deactivate'
 
-# SKILLS CLI
-alias ski='npx skills add'
-alias skiv='npx skills add venhdev/skills'
-alias skiu='npx skills remove'
-
-# TOOLS
-alias claudebypass='claude --dangerously-skip-permissions'
-alias clpp=claudebypass
-alias pn='pnpm'
-alias ocwatch='pn openclaw setup && pn gateway:watch'
-alias ocstop='pn openclaw gateway stop'
-
 # SYSTEM CONTROL
 alias sc='systemctl'
 alias scu='systemctl --user'
@@ -42,13 +30,13 @@ alias curlip='curl ifconfig.me' # Quick check of public IP
 alias ports_listen='sudo lsof -i -P -n | grep LISTEN' # Check what's hogging ports
 
 # APT PACKAGE MANAGEMENT
-alias update='sudo apt update'
-alias upgrade='sudo apt update && sudo apt upgrade -y'
-alias install='sudo apt install'
-alias remove='sudo apt remove'
-alias search='apt search'
-alias fixapt='sudo apt --fix-broken install'
-alias check-autoremove='apt list --autoremove'
+alias aupdate='sudo apt update'
+alias aupgrade='sudo apt update && sudo apt upgrade -y'
+alias ainstall='sudo apt install'
+alias aremove='sudo apt remove'
+alias asearch='apt search'
+alias afix='sudo apt --fix-broken install'
+alias aautoremove='apt list --autoremove'
 
 alias pg='ps aux | grep'
 
@@ -78,7 +66,3 @@ alias dus='du -sh * | sort -h'
 alias dut='du -h --max-depth=1 . | sort -h'
 alias dfh='df -h'
 alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20'
-
-# DOCKER & DEVOPS
-alias dps='docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"'
-alias dcl='docker system prune -a --volumes'
