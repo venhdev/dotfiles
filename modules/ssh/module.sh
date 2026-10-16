@@ -1,6 +1,6 @@
 # SSH helpers
 
-SSH_INIT="${DOTFILES_SSH_INIT:-$HOME/.ssh/id_ed25519}"
+SSH_INIT="${DOTFILES_SSH_INIT:-}"
 
 ssha() {
   [[ -z $SSH_AUTH_SOCK ]] && eval "$(ssh-agent -s)" >/dev/null

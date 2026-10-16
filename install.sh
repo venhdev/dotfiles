@@ -118,8 +118,21 @@ if [[ -f "$DIR/local/local.env" ]]; then
   existing_win_path="$(grep -E '^export DOTFILES_WIN_PATH=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
 fi
 
-auto_key="$(find "$HOME/.ssh" -maxdepth 1 -type f \( -name "*_ed25519" -o -name "*_rsa" \) 2>/dev/null | head -n1 || true)"
-default_ssh="${existing_ssh_init:-${auto_key:-$HOME/.ssh/id_ed25519}}"
+detected_ssh_keys=()
+if [[ -d "$HOME/.ssh" ]]; then
+  while IFS= read -r -d "" file; do
+    detected_ssh_keys+=("$file")
+  done < <(find "$HOME/.ssh" -maxdepth 1 -type f \
+    \( -name "*_ed25519" -o -name "*_rsa" -o -name "*_ecdsa" -o -name "id_*" \) \
+    ! -name "*.pub" ! -name "known_hosts*" ! -name "config" ! -name "authorized_keys*" \
+    ! -name "*.old" ! -name "*.bak" -print0 2>/dev/null | sort -z)
+fi
+
+auto_key=""
+if (( ${#detected_ssh_keys[@]} > 0 )); then
+  auto_key="${detected_ssh_keys[0]}"
+fi
+default_ssh="${existing_ssh_init:-$auto_key}"
 default_win="${existing_win_path:-/mnt/c/Windows}"
 
 # Module definitions:
@@ -140,7 +153,7 @@ selected=(0 0 0 0)
 # Pre-select initial state based on environment or existing symlinks
 if [[ -L "$DIR/enabled.d/50-ssh.sh" ]]; then
   selected[1]=1
-elif [[ -n "$auto_key" ]]; then
+elif [[ -n "$auto_key" || -n "$existing_ssh_init" ]]; then
   selected[1]=1
 fi
 
@@ -246,9 +259,79 @@ elif can_prompt_interactively; then
     printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
 
     if (( selected[1] )); then
-      printf "SSH key path to auto-load (Enter for default) [%s]: " "$default_ssh" >/dev/tty
-      IFS= read -r input_ssh < /dev/tty
-      ssh_init_val="${input_ssh:-$default_ssh}"
+      num_detected=${#detected_ssh_keys[@]}
+      if (( num_detected > 0 )); then
+        ssh_menu_items=()
+        for k in "${detected_ssh_keys[@]}"; do
+          base_name="$(basename "$k")"
+          ssh_menu_items+=("$base_name (~/.ssh/$base_name)")
+        done
+        ssh_menu_items+=("[None] Skip SSH auto-load")
+        ssh_menu_items+=("[Custom] Enter path manually...")
+        ssh_item_count=${#ssh_menu_items[@]}
+
+        ssh_cursor=0
+        if [[ -n "$existing_ssh_init" ]]; then
+          for ((k_idx=0; k_idx<num_detected; k_idx++)); do
+            if [[ "${detected_ssh_keys[k_idx]}" == "$existing_ssh_init" ]]; then
+              ssh_cursor=$k_idx
+              break
+            fi
+          done
+        fi
+
+        tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
+        trap restore_cursor EXIT INT TERM
+
+        while true; do
+          printf "\033[H\033[2J" >/dev/tty
+          printf "\033[1;36m=== DOTFILES CONFIGURATION ===\033[0m\n" >/dev/tty
+          printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
+          printf "Select an SSH key to auto-load on shell startup:\n" >/dev/tty
+          printf "\033[90m[↑/↓] Navigate | [Enter] Confirm\033[0m\n\n" >/dev/tty
+
+          for ((i=0; i<ssh_item_count; i++)); do
+            if (( i == ssh_cursor )); then
+              printf " \033[1;32m> %s\033[0m\n" "${ssh_menu_items[i]}" >/dev/tty
+            else
+              printf "   %s\n" "${ssh_menu_items[i]}" >/dev/tty
+            fi
+          done
+          printf "\n" >/dev/tty
+
+          IFS= read -rsn1 key < /dev/tty
+          if [[ $key == $'\x1b' ]]; then
+            read -rsn2 -t 0.1 seq < /dev/tty || true
+            case "$seq" in
+              "[A"|"OA") if ((ssh_cursor > 0)); then ssh_cursor=$((ssh_cursor - 1)); else ssh_cursor=$((ssh_item_count - 1)); fi ;;
+              "[B"|"OB") if ((ssh_cursor < ssh_item_count - 1)); then ssh_cursor=$((ssh_cursor + 1)); else ssh_cursor=0; fi ;;
+            esac
+          elif [[ $key == "k" || $key == "K" ]]; then
+            if ((ssh_cursor > 0)); then ssh_cursor=$((ssh_cursor - 1)); else ssh_cursor=$((ssh_item_count - 1)); fi
+          elif [[ $key == "j" || $key == "J" ]]; then
+            if ((ssh_cursor < ssh_item_count - 1)); then ssh_cursor=$((ssh_cursor + 1)); else ssh_cursor=0; fi
+          elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
+            break
+          fi
+        done
+        restore_cursor
+        trap - EXIT INT TERM
+
+        if (( ssh_cursor < num_detected )); then
+          ssh_init_val="${detected_ssh_keys[ssh_cursor]}"
+        elif (( ssh_cursor == num_detected )); then
+          ssh_init_val=""
+        else
+          printf "Custom SSH key path (leave empty to skip): " >/dev/tty
+          IFS= read -r input_ssh < /dev/tty
+          ssh_init_val="${input_ssh:-}"
+        fi
+      else
+        printf "No SSH keys found in ~/.ssh.\n" >/dev/tty
+        printf "SSH key path to auto-load (press Enter to skip): " >/dev/tty
+        IFS= read -r input_ssh < /dev/tty
+        ssh_init_val="${input_ssh:-}"
+      fi
     fi
 
     if (( selected[2] )); then
@@ -263,7 +346,11 @@ elif can_prompt_interactively; then
   printf " Core: shell-lib, base-aliases, editor-lib, config-lib, info-lib (Always enabled)\n" >/dev/tty
   printf " Modules:\n" >/dev/tty
   if (( selected[1] )); then
-    printf "   \033[1;32m[✔] ssh\033[0m    -> Key: %s\n" "$ssh_init_val" >/dev/tty
+    if [[ -n "$ssh_init_val" ]]; then
+      printf "   \033[1;32m[✔] ssh\033[0m    -> Key: %s\n" "$ssh_init_val" >/dev/tty
+    else
+      printf "   \033[1;32m[✔] ssh\033[0m    -> Key: (None - auto-load skipped)\n" >/dev/tty
+    fi
   else
     printf "   \033[90m[ ] ssh    -> Disabled\033[0m\n" >/dev/tty
   fi
