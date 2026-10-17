@@ -84,6 +84,21 @@ adbid() {
   ((fail == 0))
 }
 
+# Flutter web browser integration
+if [[ -z "${CHROME_EXECUTABLE:-}" ]]; then
+  for _c in \
+    "${DOTFILES_CHROME_EXECUTABLE:-}" \
+    "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe" \
+    "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe" \
+    "$HOME/.local/bin/chrome"; do
+    if [[ -n "$_c" && -x "$_c" ]]; then
+      export CHROME_EXECUTABLE="$_c"
+      break
+    fi
+  done
+  unset _c
+fi
+
 # --- Flutter helpers ---
 
 _flutter_devices() {
@@ -177,16 +192,114 @@ _flutter_icon_args() {
 
 _flutter_args() {
   local -n out="$1"
+  local platform="${2:-}"
   local f flavor mode
 
   read -rp "dart-define-from-file (skip=Enter): " f
   [[ -n $f ]] && out+=(--dart-define-from-file="$f")
 
-  flavor=$(_flutter_pick_flavor) || return
-  [[ -n $flavor ]] && out+=(--flavor="$flavor")
+  if [[ $platform != web ]]; then
+    flavor=$(_flutter_pick_flavor) || return
+    [[ -n $flavor ]] && out+=(--flavor="$flavor")
+  fi
 
   mode=$(_flutter_pick_mode) || return
   out+=("--$mode")
+}
+
+_flutter_pick_platform() {
+  local items=(
+    "android-apk"
+    "android aab"
+    "ios (comming soon)"
+    "web"
+  )
+  local choice i
+
+  echo "Platform:" >&2
+  for i in "${!items[@]}"; do
+    if ((i == 0)); then
+      printf '  %d) %s (default)\n' "$((i+1))" "${items[i]}" >&2
+    else
+      printf '  %d) %s\n' "$((i+1))" "${items[i]}" >&2
+    fi
+  done
+
+  while true; do
+    read -rp "Select platform (1-4, Enter=1): " choice || return 1
+    choice="${choice:-1}"
+
+    case "$choice" in
+      1|"android-apk"|"apk"|"android apk")
+        echo "apk"
+        return 0
+        ;;
+      2|"android aab"|"aab"|"appbundle"|"android-aab")
+        echo "appbundle"
+        return 0
+        ;;
+      3|"ios"|"ios (comming soon)"|"ios (coming soon)")
+        echo "❌ ios is disabled (comming soon)" >&2
+        ;;
+      4|"web")
+        echo "web"
+        return 0
+        ;;
+      *)
+        echo "❌ Invalid platform: $choice" >&2
+        ;;
+    esac
+  done
+}
+
+_flutter_pick_target() {
+  [[ -d lib ]] || return 0
+  local f files=() other=0
+
+  for f in lib/*main*.dart; do
+    [[ -f $f ]] || continue
+    files+=("$f")
+    [[ $f != "lib/main.dart" ]] && other=1
+  done
+
+  ((other)) || return 0
+
+  local targets=()
+  [[ -f lib/main.dart ]] && targets+=("lib/main.dart")
+  for f in "${files[@]}"; do
+    [[ $f != "lib/main.dart" ]] && targets+=("$f")
+  done
+
+  ((${#targets[@]})) || return 0
+
+  local def="${targets[0]}" choice i
+  echo "Target:" >&2
+  for i in "${!targets[@]}"; do
+    if [[ ${targets[i]} == "$def" ]]; then
+      printf '  %d) %s (default)\n' "$((i+1))" "${targets[i]}" >&2
+    else
+      printf '  %d) %s\n' "$((i+1))" "${targets[i]}" >&2
+    fi
+  done
+
+  while true; do
+    read -rp "Select target (1-${#targets[@]}, Enter=$def): " choice || return 1
+    choice="${choice:-1}"
+
+    if [[ $choice =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#targets[@]})); then
+      echo "${targets[choice-1]}"
+      return 0
+    fi
+
+    for f in "${targets[@]}"; do
+      if [[ $choice == "$f" || $choice == "${f#lib/}" ]]; then
+        echo "$f"
+        return 0
+      fi
+    done
+
+    echo "❌ Invalid target: $choice" >&2
+  done
 }
 
 flr() {
@@ -202,12 +315,32 @@ flr() {
 }
 
 flb() {
-  local target="${1:-apk}" args=() cmd
+  local platform="${1:-}" target args=() cmd
+
+  case "$platform" in
+    apk|"android-apk"|"android apk") platform="apk" ;;
+    aab|"android aab"|"android-aab"|appbundle) platform="appbundle" ;;
+    web) platform="web" ;;
+    ios*|"ios (comming soon)"|"ios (coming soon)")
+      echo "❌ ios is disabled (comming soon)" >&2
+      return 1
+      ;;
+    "")
+      platform=$(_flutter_pick_platform) || return
+      ;;
+    *)
+      echo "❌ Unknown platform: $platform (choose apk, aab, or web)" >&2
+      return 1
+      ;;
+  esac
+
+  target=$(_flutter_pick_target) || return
+  [[ -n $target ]] && args+=(-t "$target")
 
   _flutter_icon_args args || return
-  _flutter_args args || return
+  _flutter_args args "$platform" || return
 
-  cmd=(fvm flutter build "$target" "${args[@]}")
+  cmd=(fvm flutter build "$platform" "${args[@]}")
   _run_confirm "${cmd[@]}"
 }
 

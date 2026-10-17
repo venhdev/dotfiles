@@ -50,12 +50,12 @@ can_prompt_interactively() {
 prompt_yes_no() {
   local answer
   while true; do
-    printf "%s [y/N]: " "$1" > /dev/tty
+    printf "%s [y/n]: " "$1" > /dev/tty
     IFS= read -r answer < /dev/tty || return 1
     case "$answer" in
       [Yy]|[Yy][Ee][Ss]) return 0 ;;
-      [Nn]|[Nn][Oo]|"") return 1 ;;
-      *) printf "Please answer yes or no.\n" > /dev/tty ;;
+      [Nn]|[Nn][Oo]) return 1 ;;
+      *) printf "Please answer y or n (y to proceed, n to cancel).\n" > /dev/tty ;;
     esac
   done
 }
@@ -72,6 +72,203 @@ handle_cancel() {
 
 trap restore_cursor EXIT
 trap handle_cancel INT TERM
+
+# --- Generic TUI Engine ---
+
+_tui_select_one() {
+  local title="$1" subtitle="$2" selected_out="$3"
+  shift 3
+  local items=("$@")
+  local count=${#items[@]}
+  local cursor=0 key seq idx i
+
+  if [[ -n "${!selected_out:-}" ]]; then
+    for ((idx=0; idx<count; idx++)); do
+      if [[ "${items[idx]}" == "${!selected_out}" || "$idx" == "${!selected_out}" ]]; then
+        cursor=$idx
+        break
+      fi
+    done
+  fi
+
+  tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
+
+  while true; do
+    printf "\033[H\033[2J" >/dev/tty
+    printf "\033[1;36m=== %s ===\033[0m\n" "$title" >/dev/tty
+    [[ -n "$subtitle" ]] && printf "\033[1;34m--- %s ---\033[0m\n" "$subtitle" >/dev/tty
+    printf "\033[90m[↑/↓] Navigate | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
+
+    for ((i=0; i<count; i++)); do
+      if (( i == cursor )); then
+        printf " \033[1;32m> %s\033[0m\n" "${items[i]}" >/dev/tty
+      else
+        printf "   %s\n" "${items[i]}" >/dev/tty
+      fi
+    done
+    printf "\n" >/dev/tty
+
+    IFS= read -rsn1 key < /dev/tty
+    if [[ $key == $'\x1b' ]]; then
+      read -rsn2 -t 0.1 seq < /dev/tty || true
+      case "$seq" in
+        "[A"|"OA") if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((count - 1)); fi ;;
+        "[B"|"OB") if ((cursor < count - 1)); then cursor=$((cursor + 1)); else cursor=0; fi ;;
+      esac
+    elif [[ $key == "k" || $key == "K" ]]; then
+      if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((count - 1)); fi
+    elif [[ $key == "j" || $key == "J" ]]; then
+      if ((cursor < count - 1)); then cursor=$((cursor + 1)); else cursor=0; fi
+    elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
+      handle_cancel
+    elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
+      break
+    fi
+  done
+  restore_cursor
+
+  printf -v "$selected_out" "%s" "$cursor"
+}
+
+_tui_select_many() {
+  local title="$1" subtitle="$2" state_ref="$3" has_toggle_all="$4"
+  shift 4
+  local labels=("$@")
+  local count=${#labels[@]}
+  local cursor=0 key seq idx i
+  local -n sel="$state_ref"
+
+  tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
+
+  while true; do
+    printf "\033[H\033[2J" >/dev/tty
+    printf "\033[1;36m=== %s ===\033[0m\n" "$title" >/dev/tty
+    [[ -n "$subtitle" ]] && printf "\033[1;34m--- %s ---\033[0m\n" "$subtitle" >/dev/tty
+    if (( has_toggle_all )); then
+      printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [a] Toggle All | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
+    else
+      printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
+    fi
+
+    local all_mark=" "
+    if (( has_toggle_all )); then
+      local total_sel=0
+      for ((i=1; i<count; i++)); do
+        (( sel[i] )) && total_sel=$((total_sel + 1))
+      done
+      if (( total_sel == count - 1 )); then
+        all_mark="*"
+      elif (( total_sel > 0 )); then
+        all_mark="-"
+      fi
+    fi
+
+    for ((i=0; i<count; i++)); do
+      local mark=" "
+      if (( has_toggle_all && i == 0 )); then
+        mark="$all_mark"
+      else
+        (( sel[i] )) && mark="x"
+      fi
+
+      if (( i == cursor )); then
+        printf " \033[1;32m> [%s] %s\033[0m\n" "$mark" "${labels[i]}" >/dev/tty
+      else
+        printf "   [%s] %s\n" "$mark" "${labels[i]}" >/dev/tty
+      fi
+    done
+    printf "\n" >/dev/tty
+
+    IFS= read -rsn1 key < /dev/tty
+    if [[ $key == $'\x1b' ]]; then
+      read -rsn2 -t 0.1 seq < /dev/tty || true
+      case "$seq" in
+        "[A"|"OA") if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((count - 1)); fi ;;
+        "[B"|"OB") if ((cursor < count - 1)); then cursor=$((cursor + 1)); else cursor=0; fi ;;
+      esac
+    elif [[ $key == "k" || $key == "K" ]]; then
+      if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((count - 1)); fi
+    elif [[ $key == "j" || $key == "J" ]]; then
+      if ((cursor < count - 1)); then cursor=$((cursor + 1)); else cursor=0; fi
+    elif [[ $key == "a" || $key == "A" ]] && (( has_toggle_all )); then
+      local all_on=1
+      for ((idx=1; idx<count; idx++)); do
+        (( sel[idx] == 0 )) && { all_on=0; break; }
+      done
+      for ((idx=1; idx<count; idx++)); do
+        sel[idx]=$(( 1 - all_on ))
+      done
+    elif [[ $key == " " ]]; then
+      if (( has_toggle_all && cursor == 0 )); then
+        local all_on=1
+        for ((idx=1; idx<count; idx++)); do
+          (( sel[idx] == 0 )) && { all_on=0; break; }
+        done
+        for ((idx=1; idx<count; idx++)); do
+          sel[idx]=$(( 1 - all_on ))
+        done
+      else
+        sel[cursor]=$(( 1 - sel[cursor] ))
+      fi
+    elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
+      handle_cancel
+    elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
+      break
+    fi
+  done
+  restore_cursor
+}
+
+# --- Declarative Windows Tool Registry & Probe ---
+
+_probe_windows_tools() {
+  local win_dir="$1"
+  local win_drive="${win_dir%%/Windows*}"
+  [[ -z "$win_drive" ]] && win_drive="$(dirname "$win_dir")"
+  [[ -z "$win_drive" || "$win_drive" == "." ]] && win_drive="/mnt/c"
+
+  local registry=(
+    "chrome|Google Chrome (Flutter Web)|$win_drive/Program Files/Google/Chrome/Application/chrome.exe:$win_drive/Program Files (x86)/Google/Chrome/Application/chrome.exe|mobile"
+    "clip|clip.exe (Windows Clipboard)|$win_dir/System32/clip.exe|wsl"
+    "explorer|explorer.exe (File Explorer)|$win_dir/explorer.exe|wsl"
+    "powershell|powershell.exe (PowerShell)|$win_dir/System32/WindowsPowerShell/v1.0/powershell.exe|wsl"
+    "cmd|cmd.exe (Command Prompt)|$win_dir/System32/cmd.exe|wsl"
+  )
+
+  tool_ids=()
+  tool_names=()
+  tool_paths=()
+  tool_labels=()
+  tool_available=()
+  tool_selected=()
+
+  local entry id name paths cat found_path p
+  for entry in "${registry[@]}"; do
+    IFS='|' read -r id name paths cat <<< "$entry"
+    found_path=""
+    IFS=':' read -ra cand_array <<< "$paths"
+    for p in "${cand_array[@]}"; do
+      if [[ -x "$p" || -f "$p" ]]; then
+        found_path="$p"
+        break
+      fi
+    done
+
+    tool_ids+=("$id")
+    tool_names+=("$name")
+    tool_paths+=("$found_path")
+
+    if [[ -n "$found_path" ]]; then
+      tool_available+=(1)
+      tool_selected+=(1)
+      tool_labels+=("$name [Found]")
+    else
+      tool_available+=(0)
+      tool_selected+=(0)
+      tool_labels+=("$name [Not found]")
+    fi
+  done
+}
 
 # 1. Update or clone repository
 if [[ -d "$DIR/.git" ]]; then
@@ -126,9 +323,11 @@ fi
 # 2. Existing local config detection
 existing_ssh_init=""
 existing_win_path=""
+existing_chrome_path=""
 if [[ -f "$DIR/local/local.env" ]]; then
   existing_ssh_init="$(grep -E '^export DOTFILES_SSH_INIT=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
   existing_win_path="$(grep -E '^export DOTFILES_WIN_PATH=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
+  existing_chrome_path="$(grep -E '^export CHROME_EXECUTABLE=' "$DIR/local/local.env" | cut -d'"' -f2 || true)"
 fi
 
 detected_ssh_keys=()
@@ -206,94 +405,31 @@ elif command -v git >/dev/null 2>&1; then
   selected[6]=1
 fi
 
-toggle_all() {
-  local all_on=1
-  for ((idx=1; idx<num_items; idx++)); do
-    (( selected[idx] == 0 )) && { all_on=0; break; }
-  done
-  for ((idx=1; idx<num_items; idx++)); do
-    selected[idx]=$(( 1 - all_on ))
-  done
-}
-
 # 3. Interactive Selection or Non-interactive Fallback
 ssh_init_val="$default_ssh"
 win_path_val="$default_win"
+chrome_path_val="$existing_chrome_path"
 
 if (( OPT_ALL )); then
   for ((idx=1; idx<num_items; idx++)); do
     selected[idx]=1
   done
+  if [[ -d "$default_win" ]]; then
+    win_path_val="$default_win"
+    _probe_windows_tools "$win_path_val"
+    for ((t=0; t<${#tool_ids[@]}; t++)); do
+      if (( tool_available[t] )); then
+        if [[ "${tool_ids[t]}" == "chrome" && -n "${tool_paths[t]}" ]]; then
+          chrome_path_val="${tool_paths[t]}"
+        fi
+      fi
+    done
+  fi
 elif can_prompt_interactively; then
-  tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
-
-  cursor=0
-  while true; do
-    printf "\033[H\033[2J" >/dev/tty
-    printf "\033[1;36m=== DOTFILES MODULE SELECTOR ===\033[0m\n" >/dev/tty
-    printf "\033[90m[↑/↓] Navigate | [Space] Toggle | [a] Toggle All | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
-
-    total_selected=0
-    for ((i=1; i<num_items; i++)); do
-      if (( selected[i] )); then
-        total_selected=$((total_selected + 1))
-      fi
-    done
-
-    all_mark=" "
-    if (( total_selected == num_items - 1 )); then
-      all_mark="*"
-    elif (( total_selected > 0 )); then
-      all_mark="-"
-    fi
-
-    for ((i=0; i<num_items; i++)); do
-      mark=" "
-      if (( i == 0 )); then
-        mark="$all_mark"
-      else
-        (( selected[i] )) && mark="x"
-      fi
-
-      if (( i == cursor )); then
-        printf " \033[1;32m> [%s] %s\033[0m\n" "$mark" "${menu_labels[i]}" >/dev/tty
-      else
-        printf "   [%s] %s\n" "$mark" "${menu_labels[i]}" >/dev/tty
-      fi
-    done
-    printf "\n" >/dev/tty
-
-    IFS= read -rsn1 key < /dev/tty
-    if [[ $key == $'\x1b' ]]; then
-      read -rsn2 -t 0.1 seq < /dev/tty || true
-      case "$seq" in
-        "[A"|"OA") if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((num_items - 1)); fi ;;
-        "[B"|"OB") if ((cursor < num_items - 1)); then cursor=$((cursor + 1)); else cursor=0; fi ;;
-      esac
-    elif [[ $key == "k" || $key == "K" ]]; then
-      if ((cursor > 0)); then cursor=$((cursor - 1)); else cursor=$((num_items - 1)); fi
-    elif [[ $key == "j" || $key == "J" ]]; then
-      if ((cursor < num_items - 1)); then cursor=$((cursor + 1)); else cursor=0; fi
-    elif [[ $key == "a" || $key == "A" ]]; then
-      toggle_all
-    elif [[ $key == " " ]]; then
-      if (( cursor == 0 )); then
-        toggle_all
-      else
-        selected[cursor]=$(( 1 - selected[cursor] ))
-      fi
-    elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
-      handle_cancel
-    elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
-      break
-    fi
-  done
-  restore_cursor
+  _tui_select_many "DOTFILES MODULE SELECTOR" "" selected 1 "${menu_labels[@]}"
 
   # Dynamic Configuration Prompts
-  if (( selected[1] || selected[2] )); then
-    printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
-
+  if (( selected[1] || selected[2] || selected[3] )); then
     if (( selected[1] )); then
       num_detected=${#detected_ssh_keys[@]}
       if (( num_detected > 0 )); then
@@ -304,58 +440,22 @@ elif can_prompt_interactively; then
         done
         ssh_menu_items+=("[None] Skip SSH auto-load")
         ssh_menu_items+=("[Custom] Enter path manually...")
-        ssh_item_count=${#ssh_menu_items[@]}
 
-        ssh_cursor=0
+        ssh_choice=0
         if [[ -n "$existing_ssh_init" ]]; then
           for ((k_idx=0; k_idx<num_detected; k_idx++)); do
             if [[ "${detected_ssh_keys[k_idx]}" == "$existing_ssh_init" ]]; then
-              ssh_cursor=$k_idx
+              ssh_choice=$k_idx
               break
             fi
           done
         fi
 
-        tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
+        _tui_select_one "DOTFILES CONFIGURATION" "SSH Key Selection" ssh_choice "${ssh_menu_items[@]}"
 
-        while true; do
-          printf "\033[H\033[2J" >/dev/tty
-          printf "\033[1;36m=== DOTFILES CONFIGURATION ===\033[0m\n" >/dev/tty
-          printf "\033[1;34m--- Dynamic Configuration ---\033[0m\n" >/dev/tty
-          printf "Select an SSH key to auto-load on shell startup:\n" >/dev/tty
-          printf "\033[90m[↑/↓] Navigate | [Enter] Confirm | [q] Cancel\033[0m\n\n" >/dev/tty
-
-          for ((i=0; i<ssh_item_count; i++)); do
-            if (( i == ssh_cursor )); then
-              printf " \033[1;32m> %s\033[0m\n" "${ssh_menu_items[i]}" >/dev/tty
-            else
-              printf "   %s\n" "${ssh_menu_items[i]}" >/dev/tty
-            fi
-          done
-          printf "\n" >/dev/tty
-
-          IFS= read -rsn1 key < /dev/tty
-          if [[ $key == $'\x1b' ]]; then
-            read -rsn2 -t 0.1 seq < /dev/tty || true
-            case "$seq" in
-              "[A"|"OA") if ((ssh_cursor > 0)); then ssh_cursor=$((ssh_cursor - 1)); else ssh_cursor=$((ssh_item_count - 1)); fi ;;
-              "[B"|"OB") if ((ssh_cursor < ssh_item_count - 1)); then ssh_cursor=$((ssh_cursor + 1)); else ssh_cursor=0; fi ;;
-            esac
-          elif [[ $key == "k" || $key == "K" ]]; then
-            if ((ssh_cursor > 0)); then ssh_cursor=$((ssh_cursor - 1)); else ssh_cursor=$((ssh_item_count - 1)); fi
-          elif [[ $key == "j" || $key == "J" ]]; then
-            if ((ssh_cursor < ssh_item_count - 1)); then ssh_cursor=$((ssh_cursor + 1)); else ssh_cursor=0; fi
-          elif [[ $key == "q" || $key == "Q" || $key == $'\x03' ]]; then
-            handle_cancel
-          elif [[ $key == "" || $key == $'\r' || $key == $'\n' ]]; then
-            break
-          fi
-        done
-        restore_cursor
-
-        if (( ssh_cursor < num_detected )); then
-          ssh_init_val="${detected_ssh_keys[ssh_cursor]}"
-        elif (( ssh_cursor == num_detected )); then
+        if (( ssh_choice < num_detected )); then
+          ssh_init_val="${detected_ssh_keys[ssh_choice]}"
+        elif (( ssh_choice == num_detected )); then
           ssh_init_val=""
         else
           printf "Custom SSH key path (leave empty to skip): " >/dev/tty
@@ -370,10 +470,43 @@ elif can_prompt_interactively; then
       fi
     fi
 
-    if (( selected[2] )); then
-      printf "Windows system path [%s]: " "$default_win" >/dev/tty
-      IFS= read -r input_win < /dev/tty
-      win_path_val="${input_win:-$default_win}"
+    if (( selected[2] || selected[3] )); then
+      win_menu_items=()
+      if [[ -d "$default_win" ]]; then
+        win_menu_items+=("$default_win")
+      else
+        win_menu_items+=("/mnt/c/Windows")
+      fi
+      win_menu_items+=("[None] Skip Windows integration")
+      win_menu_items+=("[Custom] Enter path manually...")
+
+      win_choice=0
+      [[ -z "$existing_win_path" && ! -d "$default_win" ]] && win_choice=1
+
+      _tui_select_one "DOTFILES CONFIGURATION" "Windows Path Selection" win_choice "${win_menu_items[@]}"
+
+      if (( win_choice == 0 )); then
+        win_path_val="${win_menu_items[0]}"
+      elif (( win_choice == 1 )); then
+        win_path_val=""
+      else
+        printf "Custom Windows path (leave empty to skip): " >/dev/tty
+        IFS= read -r input_win < /dev/tty
+        win_path_val="${input_win:-}"
+      fi
+
+      if [[ -n "$win_path_val" && "$win_path_val" != "none" && -d "$win_path_val" ]]; then
+        _probe_windows_tools "$win_path_val"
+        _tui_select_many "DOTFILES CONFIGURATION" "Windows Tools Selection" tool_selected 0 "${tool_labels[@]}"
+
+        for ((t=0; t<${#tool_ids[@]}; t++)); do
+          if (( tool_selected[t] )); then
+            if [[ "${tool_ids[t]}" == "chrome" && -n "${tool_paths[t]}" ]]; then
+              chrome_path_val="${tool_paths[t]}"
+            fi
+          fi
+        done
+      fi
     fi
   fi
 
@@ -383,22 +516,30 @@ elif can_prompt_interactively; then
   printf " Modules:\n" >/dev/tty
   if (( selected[1] )); then
     if [[ -n "$ssh_init_val" ]]; then
-      printf "   \033[1;32m[✔] ssh\033[0m    -> Key: %s\n" "$ssh_init_val" >/dev/tty
+      printf "   \033[1;32m[✔] ssh\033[0m       -> Key: %s\n" "$ssh_init_val" >/dev/tty
     else
-      printf "   \033[1;32m[✔] ssh\033[0m    -> Key: (None - auto-load skipped)\n" >/dev/tty
+      printf "   \033[1;32m[✔] ssh\033[0m       -> Key: (None - auto-load skipped)\n" >/dev/tty
     fi
   else
-    printf "   \033[90m[ ] ssh    -> Disabled\033[0m\n" >/dev/tty
+    printf "   \033[90m[ ] ssh       -> Disabled\033[0m\n" >/dev/tty
   fi
 
   if (( selected[2] )); then
-    printf "   \033[1;32m[✔] wsl\033[0m    -> WinPath: %s\n" "$win_path_val" >/dev/tty
+    if [[ -n "$win_path_val" ]]; then
+      printf "   \033[1;32m[✔] wsl\033[0m       -> WinPath: %s\n" "$win_path_val" >/dev/tty
+    else
+      printf "   \033[1;32m[✔] wsl\033[0m       -> (None - Windows path skipped)\n" >/dev/tty
+    fi
   else
-    printf "   \033[90m[ ] wsl    -> Disabled\033[0m\n" >/dev/tty
+    printf "   \033[90m[ ] wsl       -> Disabled\033[0m\n" >/dev/tty
   fi
 
   if (( selected[3] )); then
-    printf "   \033[1;32m[✔] mobile\033[0m    -> Flutter, Shorebird, ADB tools enabled\n" >/dev/tty
+    if [[ -n "$chrome_path_val" ]]; then
+      printf "   \033[1;32m[✔] mobile\033[0m    -> Flutter, Shorebird, ADB | Chrome: %s\n" "$chrome_path_val" >/dev/tty
+    else
+      printf "   \033[1;32m[✔] mobile\033[0m    -> Flutter, Shorebird, ADB tools enabled\n" >/dev/tty
+    fi
   else
     printf "   \033[90m[ ] mobile    -> Disabled\033[0m\n" >/dev/tty
   fi
@@ -436,9 +577,17 @@ cat > "$DIR/local/local.env.tmp" <<EOF
 # Machine-specific local configuration (managed by dotfiles install.sh)
 export DOTFILES_SSH_INIT="${ssh_init_val}"
 export DOTFILES_WIN_PATH="${win_path_val}"
+export CHROME_EXECUTABLE="${chrome_path_val}"
 EOF
 chmod 600 "$DIR/local/local.env.tmp"
 mv "$DIR/local/local.env.tmp" "$DIR/local/local.env"
+
+# Symlink Chrome if selected
+if [[ -n "$chrome_path_val" && -x "$chrome_path_val" ]]; then
+  mkdir -p "$HOME/.local/bin"
+  ln -sfn "$chrome_path_val" "$HOME/.local/bin/chrome"
+  ln -sfn "$chrome_path_val" "$HOME/.local/bin/google-chrome"
+fi
 
 # Sync symlinks in enabled.d
 rm -f "$DIR/enabled.d"/50-*.sh
