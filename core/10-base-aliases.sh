@@ -36,7 +36,13 @@ alias ainstall='sudo apt install'
 alias aremove='sudo apt remove'
 alias asearch='apt search'
 alias afix='sudo apt --fix-broken install'
-alias aautoremove='apt list --autoremove'
+aautoremove() {
+  sudo apt autoremove --dry-run
+
+  _confirm "Continue? [y/N] " &&
+    sudo apt autoremove ||
+    echo "Cancelled"
+}
 
 alias pg='ps aux | grep'
 

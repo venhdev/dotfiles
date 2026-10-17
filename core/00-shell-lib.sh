@@ -35,9 +35,11 @@ showfunc() {
 _CMD_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/commands.log"
 
 _confirm() {
-  local a
-  read -rp "${1:-OK? [Y/n] }" a
-  [[ ${a:-y} =~ ^[Yy]$ ]]
+  local prompt="${1:-OK? [Y/n] }"
+  local a default="y"
+  [[ $prompt =~ \[y/N\] ]] && default="n"
+  read -rp "$prompt" a
+  [[ ${a:-$default} =~ ^[Yy]$ ]]
 }
 
 _log_cmd() {

@@ -52,12 +52,3 @@ conf() {
 
   "$EDITOR" "${m[$k]}"
 }
-
-autoremove() {
-  sudo apt autoremove --dry-run
-
-  read -rp "Continue? [y/N] " r
-  [[ $r =~ ^[Yy]$ ]] &&
-    sudo apt autoremove ||
-    echo "Cancelled"
-}
