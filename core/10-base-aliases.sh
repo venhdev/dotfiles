@@ -3,7 +3,14 @@
 # ENVIRONMENT & RELOAD
 alias rel='source ~/.bashrc'
 alias rebash='exec bash'
-alias updf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
+alias insdf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
+alias instools='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/scripts/install-tools.sh"'
+alias insssh='insdf ssh'
+alias inswsl='insdf wsl'
+alias insmobile='insdf mobile'
+alias insdocker='insdf docker'
+alias insai='insdf ai'
+alias insgit='insdf gitconfig'
 alias ts='date +%s'
 
 # PYTHON VENV

@@ -8,21 +8,31 @@ MARKER="# Load dotfiles"
 
 # Parse CLI arguments
 OPT_ALL=0
+OPT_MODULES=()
 for arg in "$@"; do
   case "$arg" in
     -a|--all)
       OPT_ALL=1
       ;;
     -h|--help)
-      echo "Usage: ./install.sh [OPTIONS]"
+      echo "Usage: ./install.sh [OPTIONS] [MODULE...]"
       echo
       echo "Options:"
       echo "  -a, --all    Install all modules with defaults (non-interactive)"
       echo "  -h, --help   Show this help message"
+      echo
+      echo "Modules: ssh, wsl, mobile, docker, ai, gitconfig (or git), tools"
       exit 0
+      ;;
+    ssh|wsl|mobile|docker|ai|git|gitconfig|tools)
+      OPT_MODULES+=("$arg")
       ;;
   esac
 done
+
+if [[ "${OPT_MODULES[*]}" == "tools" ]]; then
+  exec bash "$DIR/scripts/install-tools.sh"
+fi
 
 is_worktree_dirty() {
   [[ -n "$(git -C "$DIR" status --porcelain)" ]]
@@ -367,7 +377,7 @@ default_win="${existing_win_path:-/mnt/c/Windows}"
 # index 4: docker
 # index 5: ai
 # index 6: gitconfig
-modules=("ALL" "ssh" "wsl" "mobile" "docker" "ai" "gitconfig")
+modules=("ALL" "ssh" "wsl" "mobile" "docker" "ai" "gitconfig" "tools")
 menu_labels=(
   "[ALL] Select / Deselect all modules"
   "ssh       - SSH Manager (Auto ssh-agent & SSH key loading)"
@@ -376,9 +386,10 @@ menu_labels=(
   "docker    - Docker Shortcuts (dps, dcl cleanup)"
   "ai        - AI & Agent Tools (Claude, OpenClaw, Skills CLI)"
   "gitconfig - Git Aliases & Config (lg, lga, inf, br, co, ...)"
+  "tools     - Common CLI Tools (Install/verify git, curl, jq, rg)"
 )
 num_items=${#modules[@]}
-selected=(0 0 0 0 0 0 0)
+selected=(0 0 0 0 0 0 0 0)
 
 # Pre-select initial state based on environment or existing symlinks
 if [[ -L "$DIR/enabled.d/50-ssh.sh" ]]; then
@@ -417,10 +428,104 @@ elif command -v git >/dev/null 2>&1; then
   selected[6]=1
 fi
 
+_prompt_ssh_key() {
+  local num_detected=${#detected_ssh_keys[@]}
+  if (( num_detected > 0 )); then
+    local ssh_menu_items=() k base_name ssh_choice=0 k_idx input_ssh
+    for k in "${detected_ssh_keys[@]}"; do
+      base_name="$(basename "$k")"
+      ssh_menu_items+=("$base_name (~/.ssh/$base_name)")
+    done
+    ssh_menu_items+=("[None] Skip SSH auto-load")
+    ssh_menu_items+=("[Custom] Enter path manually...")
+
+    if [[ -n "$existing_ssh_init" ]]; then
+      for ((k_idx=0; k_idx<num_detected; k_idx++)); do
+        if [[ "${detected_ssh_keys[k_idx]}" == "$existing_ssh_init" ]]; then
+          ssh_choice=$k_idx
+          break
+        fi
+      done
+    fi
+
+    _tui_select_one "DOTFILES CONFIGURATION" "SSH Key Selection" ssh_choice "${ssh_menu_items[@]}"
+
+    if (( ssh_choice < num_detected )); then
+      ssh_init_val="${detected_ssh_keys[ssh_choice]}"
+    elif (( ssh_choice == num_detected )); then
+      ssh_init_val=""
+    else
+      printf "Custom SSH key path (leave empty to skip): " >/dev/tty
+      IFS= read -r input_ssh < /dev/tty
+      ssh_init_val="${input_ssh:-}"
+    fi
+  else
+    printf "No SSH keys found in ~/.ssh.\n" >/dev/tty
+    printf "SSH key path to auto-load (press Enter to skip): " >/dev/tty
+    IFS= read -r input_ssh < /dev/tty
+    ssh_init_val="${input_ssh:-}"
+  fi
+}
+
+_prompt_win_tools() {
+  local win_menu_items=() win_choice=0 input_win t
+  if [[ -d "$default_win" ]]; then
+    win_menu_items+=("$default_win")
+  else
+    win_menu_items+=("/mnt/c/Windows")
+  fi
+  win_menu_items+=("[None] Skip Windows integration")
+  win_menu_items+=("[Custom] Enter path manually...")
+
+  [[ -z "$existing_win_path" && ! -d "$default_win" ]] && win_choice=1
+
+  _tui_select_one "DOTFILES CONFIGURATION" "Windows Path Selection" win_choice "${win_menu_items[@]}"
+
+  if (( win_choice == 0 )); then
+    win_path_val="${win_menu_items[0]}"
+  elif (( win_choice == 1 )); then
+    win_path_val=""
+  else
+    printf "Custom Windows path (leave empty to skip): " >/dev/tty
+    IFS= read -r input_win < /dev/tty
+    win_path_val="${input_win:-}"
+  fi
+
+  if [[ -n "$win_path_val" && "$win_path_val" != "none" && -d "$win_path_val" ]]; then
+    _probe_windows_tools "$win_path_val"
+    _tui_select_many "DOTFILES CONFIGURATION" "Windows Tools Selection" tool_selected 0 "${tool_labels[@]}"
+
+    for ((t=0; t<${#tool_ids[@]}; t++)); do
+      if (( tool_selected[t] )); then
+        if [[ "${tool_ids[t]}" == "chrome" && -n "${tool_paths[t]}" ]]; then
+          chrome_path_val="${tool_paths[t]}"
+        fi
+      fi
+    done
+  fi
+}
+
 # 3. Interactive Selection or Non-interactive Fallback
 ssh_init_val="$default_ssh"
 win_path_val="$default_win"
 chrome_path_val="$existing_chrome_path"
+
+target_ssh_prompt=0
+target_win_prompt=0
+
+if (( ${#OPT_MODULES[@]} > 0 )); then
+  for m in "${OPT_MODULES[@]}"; do
+    case "$m" in
+      ssh) selected[1]=1; target_ssh_prompt=1 ;;
+      wsl) selected[2]=1; target_win_prompt=1 ;;
+      mobile) selected[3]=1; target_win_prompt=1 ;;
+      docker) selected[4]=1 ;;
+      ai) selected[5]=1 ;;
+      git|gitconfig) selected[6]=1 ;;
+      tools) selected[7]=1 ;;
+    esac
+  done
+fi
 
 if (( OPT_ALL )); then
   for ((idx=1; idx<num_items; idx++)); do
@@ -438,90 +543,19 @@ if (( OPT_ALL )); then
     done
   fi
 elif can_prompt_interactively; then
-  _tui_select_many "DOTFILES MODULE SELECTOR" "" selected 1 "${menu_labels[@]}"
+  if (( ${#OPT_MODULES[@]} > 0 )); then
+    # User specified targeted module(s) via CLI (e.g. insssh, insmobile)
+    (( target_ssh_prompt )) && _prompt_ssh_key
+    (( target_win_prompt )) && _prompt_win_tools
+  else
+    _tui_select_many "DOTFILES MODULE SELECTOR" "" selected 1 "${menu_labels[@]}"
 
-  # Dynamic Configuration Prompts
-  if (( selected[1] || selected[2] || selected[3] )); then
-    if (( selected[1] )); then
-      num_detected=${#detected_ssh_keys[@]}
-      if (( num_detected > 0 )); then
-        ssh_menu_items=()
-        for k in "${detected_ssh_keys[@]}"; do
-          base_name="$(basename "$k")"
-          ssh_menu_items+=("$base_name (~/.ssh/$base_name)")
-        done
-        ssh_menu_items+=("[None] Skip SSH auto-load")
-        ssh_menu_items+=("[Custom] Enter path manually...")
-
-        ssh_choice=0
-        if [[ -n "$existing_ssh_init" ]]; then
-          for ((k_idx=0; k_idx<num_detected; k_idx++)); do
-            if [[ "${detected_ssh_keys[k_idx]}" == "$existing_ssh_init" ]]; then
-              ssh_choice=$k_idx
-              break
-            fi
-          done
-        fi
-
-        _tui_select_one "DOTFILES CONFIGURATION" "SSH Key Selection" ssh_choice "${ssh_menu_items[@]}"
-
-        if (( ssh_choice < num_detected )); then
-          ssh_init_val="${detected_ssh_keys[ssh_choice]}"
-        elif (( ssh_choice == num_detected )); then
-          ssh_init_val=""
-        else
-          printf "Custom SSH key path (leave empty to skip): " >/dev/tty
-          IFS= read -r input_ssh < /dev/tty
-          ssh_init_val="${input_ssh:-}"
-        fi
-      else
-        printf "No SSH keys found in ~/.ssh.\n" >/dev/tty
-        printf "SSH key path to auto-load (press Enter to skip): " >/dev/tty
-        IFS= read -r input_ssh < /dev/tty
-        ssh_init_val="${input_ssh:-}"
-      fi
-    fi
-
-    if (( selected[2] || selected[3] )); then
-      win_menu_items=()
-      if [[ -d "$default_win" ]]; then
-        win_menu_items+=("$default_win")
-      else
-        win_menu_items+=("/mnt/c/Windows")
-      fi
-      win_menu_items+=("[None] Skip Windows integration")
-      win_menu_items+=("[Custom] Enter path manually...")
-
-      win_choice=0
-      [[ -z "$existing_win_path" && ! -d "$default_win" ]] && win_choice=1
-
-      _tui_select_one "DOTFILES CONFIGURATION" "Windows Path Selection" win_choice "${win_menu_items[@]}"
-
-      if (( win_choice == 0 )); then
-        win_path_val="${win_menu_items[0]}"
-      elif (( win_choice == 1 )); then
-        win_path_val=""
-      else
-        printf "Custom Windows path (leave empty to skip): " >/dev/tty
-        IFS= read -r input_win < /dev/tty
-        win_path_val="${input_win:-}"
-      fi
-
-      if [[ -n "$win_path_val" && "$win_path_val" != "none" && -d "$win_path_val" ]]; then
-        _probe_windows_tools "$win_path_val"
-        _tui_select_many "DOTFILES CONFIGURATION" "Windows Tools Selection" tool_selected 0 "${tool_labels[@]}"
-
-        for ((t=0; t<${#tool_ids[@]}; t++)); do
-          if (( tool_selected[t] )); then
-            if [[ "${tool_ids[t]}" == "chrome" && -n "${tool_paths[t]}" ]]; then
-              chrome_path_val="${tool_paths[t]}"
-            fi
-          fi
-        done
-      fi
+    # Dynamic Configuration Prompts
+    if (( selected[1] || selected[2] || selected[3] )); then
+      (( selected[1] )) && _prompt_ssh_key
+      (( selected[2] || selected[3] )) && _prompt_win_tools
     fi
   fi
-
   # Summary and Confirmation
   printf "\n\033[1;36m================ INSTALLATION SUMMARY ================\033[0m\n" >/dev/tty
   printf " Core: shell-lib, base-aliases, editor-lib, config-lib, info-lib (Always enabled)\n" >/dev/tty
@@ -537,10 +571,15 @@ elif can_prompt_interactively; then
   fi
 
   if (( selected[2] )); then
+    wsl_path_info=""
+    if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+      ap_val=$(awk -F'=' '/^[[:space:]]*appendWindowsPath[[:space:]]*=/ {gsub(/[[:space:]]/, "", $2); val=tolower($2)} END {if (val=="false" || val=="true") print val; else print "default/true"}' /etc/wsl.conf 2>/dev/null || echo "default/true")
+      wsl_path_info=" (appendWindowsPath: $ap_val)"
+    fi
     if [[ -n "$win_path_val" ]]; then
-      printf "   \033[1;32m[✔] wsl\033[0m       -> WinPath: %s\n" "$win_path_val" >/dev/tty
+      printf "   \033[1;32m[✔] wsl\033[0m       -> WinPath: %s%s\n" "$win_path_val" "$wsl_path_info" >/dev/tty
     else
-      printf "   \033[1;32m[✔] wsl\033[0m       -> (None - Windows path skipped)\n" >/dev/tty
+      printf "   \033[1;32m[✔] wsl\033[0m       -> (None - Windows path skipped)%s\n" "$wsl_path_info" >/dev/tty
     fi
   else
     printf "   \033[90m[ ] wsl       -> Disabled\033[0m\n" >/dev/tty
@@ -572,6 +611,10 @@ elif can_prompt_interactively; then
     printf "   \033[1;32m[✔] gitconfig\033[0m -> Git Aliases & Config (include.path enabled)\n" >/dev/tty
   else
     printf "   \033[90m[ ] gitconfig -> Disabled\033[0m\n" >/dev/tty
+  fi
+
+  if (( selected[7] )); then
+    printf "   \033[1;32m[✔] tools\033[0m     -> Common CLI tools (git, curl, jq, rg)\n" >/dev/tty
   fi
   printf "\n" >/dev/tty
 
@@ -641,6 +684,13 @@ if command -v git >/dev/null 2>&1; then
     fi
   else
     git config --global --unset-all include.path "$GIT_CONFIG_FILE" 2>/dev/null || true
+  fi
+fi
+
+# 7. Common CLI Tools (if selected)
+if (( selected[7] )); then
+  if [[ -f "$DIR/scripts/install-tools.sh" ]]; then
+    bash "$DIR/scripts/install-tools.sh"
   fi
 fi
 
