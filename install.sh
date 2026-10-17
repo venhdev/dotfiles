@@ -320,6 +320,18 @@ else
   fi
 fi
 
+# Hand over execution to local script in $DIR if running from pipe/stdin or updated
+if [[ -z "${DOTFILES_REEXEC:-}" ]]; then
+  current_script=""
+  [[ -n "${BASH_SOURCE[0]:-}" ]] && current_script="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || true)"
+  target_script="$(readlink -f "$DIR/install.sh" 2>/dev/null || true)"
+
+  if [[ -z "$current_script" || "$current_script" != "$target_script" || "${pull_output:-}" != *"Already up to date."* ]]; then
+    export DOTFILES_REEXEC=1
+    exec bash "$DIR/install.sh" "$@"
+  fi
+fi
+
 # 2. Existing local config detection
 existing_ssh_init=""
 existing_win_path=""

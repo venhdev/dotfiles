@@ -3,7 +3,7 @@
 # ENVIRONMENT & RELOAD
 alias rel='source ~/.bashrc'
 alias rebash='exec bash'
-alias updf='curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash'
+alias updf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
 alias ts='date +%s'
 
 # PYTHON VENV
