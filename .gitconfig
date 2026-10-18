@@ -7,7 +7,7 @@
     sts = status --short
     wt = worktree list
     l1 = log --oneline
-    lg = "!f() { n=10; if [ \"$#\" -gt 0 ]; then case \"$1\" in [0-9]*) case \"$1\" in *[!0-9]*) ;; *) n=\"$1\"; shift ;; esac ;; -[0-9]*) case \"${1#-}\" in *[!0-9]*) ;; *) n=\"${1#-}\"; shift ;; esac ;; esac; fi; git log --graph --oneline --all --decorate --color -n \"$n\" \"$@\"; }; f"
+    lg = "!f() { n=15; if [ \"$#\" -gt 0 ]; then case \"$1\" in [0-9]*) case \"$1\" in *[!0-9]*) ;; *) n=\"$1\"; shift ;; esac ;; -[0-9]*) case \"${1#-}\" in *[!0-9]*) ;; *) n=\"${1#-}\"; shift ;; esac ;; esac; fi; git log --graph --oneline --all --decorate --color -n \"$n\" \"$@\"; }; f"
     lga = log --graph --oneline --all --decorate --color
     sh = show --shortstat
     df = "!f() { git diff --stat HEAD~${1:-1}; }; f"
@@ -31,4 +31,4 @@
 
     undo = "!f() { git reset --soft HEAD~${1:-1}; }; f"
     addpush = "!f() { git add -A && git commit -m \"$1\" && git push; }; f"
-    inf = "!f() { echo \"🧷 BRANCH: $(git branch --show-current 2>/dev/null || echo '-')\"; echo \"🔥 STATUS:\"; git status -sb; echo; echo \"🌐 REMOTES:\"; git remote -v; echo; echo \"🕒 LAST COMMITS:\"; git log --oneline --decorate -5; }; f"
+    inf = "!f() { echo \"🌐 REMOTES:\"; git remote -v; echo; echo \"🕒 LAST COMMITS:\"; git log --oneline --decorate -10; echo; echo \"🧷 BRANCH: $(git branch --show-current 2>/dev/null || echo '-')\"; echo \"🔥 STATUS:\"; git status -sb; }; f"

@@ -56,7 +56,7 @@ git -C "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles" stash pop
 
 The installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`:
 
-- `git lg` → latest 10 commits (or `git lg <count>`, e.g. `git lg 5` or `git lg main`)
+- `git lg` → latest 15 commits (or `git lg <count>`, e.g. `git lg 5` or `git lg main`)
 - `git lga` → full history
 - `git inf` → quick branch status and remote summary
 
