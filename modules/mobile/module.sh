@@ -32,13 +32,21 @@ _adb_pick_devices() {
 }
 
 _adb_pick_apks() {
-  local dir="${1:-build/app/outputs/flutter-apk}" filter="${2:-}"
-  local apks=() f
+  local root_dir="." filter=""
+  if [[ -n "${1:-}" ]]; then
+    if [[ -d "$1" ]]; then
+      root_dir="$1"
+      filter="${2:-}"
+    else
+      root_dir="."
+      filter="$1"
+    fi
+  fi
 
-  for f in "$dir"/*.apk; do
-    [[ -e $f && ( -z $filter || $f == *"$filter"* ) ]] &&
-      apks+=("$f")
-  done
+  local apks=() f
+  while IFS= read -r f; do
+    [[ -n $f && ( -z $filter || $f == *"$filter"* ) ]] && apks+=("$f")
+  done < <(find "$root_dir" -not -path '*/.*' -type f -name "*.apk" -printf '%T@ %p\n' 2>/dev/null | sort -nr | cut -d' ' -f2-)
 
   _pick_many "📦 Select APK(s):" "${apks[@]}"
 }
