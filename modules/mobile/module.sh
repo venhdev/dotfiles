@@ -198,18 +198,131 @@ _flutter_icon_args() {
   fi
 }
 
+_flutter_find_env_candidates() {
+  local dir f candidates=()
+  local search_dirs=("." "env" "assets/env" "config" "config/env")
+
+  for dir in "${search_dirs[@]}"; do
+    [[ -d "$dir" ]] || continue
+    for f in "$dir"/.env* "$dir"/*.env*; do
+      [[ -f "$f" ]] || continue
+      case "$(basename "$f")" in
+        *.example*|*.sample*|*.template*|*.bak|*.swp|*.tmp|*.default*) continue ;;
+      esac
+      f="${f#./}"
+      candidates+=("$f")
+    done
+  done
+
+  for f in "${candidates[@]}"; do
+    echo "$f"
+  done | awk '!seen[$0]++'
+}
+
+_flutter_pick_env() {
+  local flavor="${1:-}" default_env=""
+  local candidates=() f choice
+
+  mapfile -t candidates < <(_flutter_find_env_candidates)
+
+  if [[ -n $flavor ]]; then
+    local fl_lower="${flavor,,}"
+    for f in "${candidates[@]}"; do
+      if [[ "$(basename "$f")" == ".env.$flavor" || "$(basename "$f")" == ".env.$fl_lower" ]]; then
+        default_env="$f"
+        break
+      fi
+    done
+    if [[ -z $default_env ]]; then
+      for f in "${candidates[@]}"; do
+        if [[ "$(basename "$f")" == *"$fl_lower"* ]]; then
+          default_env="$f"
+          break
+        fi
+      done
+    fi
+  fi
+
+  if [[ -z $default_env ]]; then
+    for f in "${candidates[@]}"; do
+      if [[ "$f" == ".env" || "$(basename "$f")" == ".env" ]]; then
+        default_env="$f"
+        break
+      fi
+    done
+  fi
+
+  if [[ -z $default_env && ${#candidates[@]} -gt 0 ]]; then
+    default_env="${candidates[0]}"
+  fi
+
+  if ((${#candidates[@]} == 0)); then
+    read -rp "dart-define-from-file (skip=Enter): " choice
+    echo "$choice"
+    return 0
+  fi
+
+  echo "Env file:" >&2
+  local i
+  for i in "${!candidates[@]}"; do
+    if [[ "${candidates[i]}" == "$default_env" ]]; then
+      printf "  %d) %s (default)\n" "$((i + 1))" "${candidates[i]}" >&2
+    else
+      printf "  %d) %s\n" "$((i + 1))" "${candidates[i]}" >&2
+    fi
+  done
+  printf "  s) Skip\n" >&2
+
+  local prompt="Select env file (1-${#candidates[@]}, Enter=${default_env:-skip}, s=skip): "
+  [[ -z $default_env ]] && prompt="Select env file (1-${#candidates[@]}, Enter=skip, s=skip): "
+
+  read -rp "$prompt" choice || return 1
+  choice="${choice:-$default_env}"
+
+  case "$choice" in
+    s|S|skip|SKIP|none|NONE)
+      echo ""
+      return 0
+      ;;
+    "")
+      echo ""
+      return 0
+      ;;
+  esac
+
+  if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#candidates[@]})); then
+    echo "${candidates[choice - 1]}"
+    return 0
+  fi
+
+  for f in "${candidates[@]}"; do
+    if [[ "$choice" == "$f" ]]; then
+      echo "$f"
+      return 0
+    fi
+  done
+
+  if [[ -f "$choice" ]]; then
+    echo "$choice"
+    return 0
+  fi
+
+  echo "❌ File not found: $choice" >&2
+  return 1
+}
+
 _flutter_args() {
   local -n out="$1"
   local platform="${2:-}"
-  local f flavor mode
-
-  read -rp "dart-define-from-file (skip=Enter): " f
-  [[ -n $f ]] && out+=(--dart-define-from-file="$f")
+  local envfile flavor mode
 
   if [[ $platform != web ]]; then
     flavor=$(_flutter_pick_flavor) || return
     [[ -n $flavor ]] && out+=(--flavor="$flavor")
   fi
+
+  envfile=$(_flutter_pick_env "$flavor") || return
+  [[ -n $envfile ]] && out+=(--dart-define-from-file="$envfile")
 
   mode=$(_flutter_pick_mode) || return
   out+=("--$mode")
@@ -400,23 +513,12 @@ _shorebird_pick() {
   return 1
 }
 
-# Appends to the caller's array, so it must not run inside $(...).
 _shorebird_dart_args() {
   local -n out="$1"
   local flavor="$2" envfile
 
-  if [[ -n $flavor ]]; then
-    envfile=".env.$flavor"
-
-    [[ -f $envfile ]] || {
-      echo "❌ Missing env file: $envfile" >&2
-      return 1
-    }
-  else
-    envfile=".env"
-  fi
-
-  [[ -f $envfile ]] && out+=(--dart-define-from-file="$envfile")
+  envfile=$(_flutter_pick_env "$flavor") || return
+  [[ -n $envfile ]] && out+=(--dart-define-from-file="$envfile")
   return 0
 }
 

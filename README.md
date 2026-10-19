@@ -59,6 +59,7 @@ The installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`:
 - `git lg` → latest 15 commits (or `git lg <count>`, e.g. `git lg 5` or `git lg main`)
 - `git lga` → full history
 - `git inf` → quick branch status and remote summary
+- `git swr <branch>` → switch branch or track remote branch (accepts `origin/<branch>` or `<branch>`)
 
 ## Shell & History Helpers
 

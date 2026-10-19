@@ -2,6 +2,7 @@
     br = branch
     co = checkout
     sw = switch
+    swr = "!f() { ref=\"$1\"; [ -z \"$ref\" ] && { echo \"Usage: git swr <branch | remote/branch>\" >&2; exit 1; }; remote=\"origin\"; branch=\"$ref\"; case \"$ref\" in origin/*) remote=\"origin\"; branch=\"${ref#origin/}\" ;; */*) first=\"${ref%%/*}\"; if git remote | grep -qx \"$first\"; then remote=\"$first\"; branch=\"${ref#$first/}\"; fi ;; esac; if git show-ref --verify --quiet \"refs/heads/$branch\"; then git switch \"$branch\"; elif git show-ref --verify --quiet \"refs/remotes/$remote/$branch\"; then git switch -c \"$branch\" --track \"$remote/$branch\"; else git switch \"$branch\"; fi; }; f"
 
     st = status
     sts = status --short
