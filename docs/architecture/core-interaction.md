@@ -18,6 +18,7 @@ Standardized interactive patterns across dotfiles (`core/00-shell-lib.sh`, `inst
 | **TUI Single-Select** | Key & path selectors | `[↑/↓]` `[j/k]` nav, `[Enter]` confirm, `[q]` cancel | String value or `""` (None) | Pre-detected default or abort |
 | **CLI Picker (`_pick_one`)** | Interactive shell helpers | Numeric index (`1-N`) or item name; `[Enter]` default | Selected item to stdout | Returns single candidate |
 | **CLI Multi-Picker (`_pick_many`)** | ADB / multi-target | Space-separated indices (`1 2 4`) | Selected items (newline-delimited) | Returns single candidate |
+| **History Exec (`he`)** | Interactive shell history | Numeric index (`1-N`); `[Enter]` default (1=latest), `[q]` cancel | Direct command execution in shell session | Cancels on non-interactive / EOF |
 | **Confirm Gate (`_confirm`)** | Pre-execution safety | `[y/N]` or `[Y/n]` via `read -rp` | Return code `0` (yes) / `1` (no) | Fails safe (aborts) |
 | **Installer Confirm (`prompt_yes_no`)** | Final install gate | Explicit `[y/n]`; Enter re-prompts | Return code `0` (yes) / `1` (no) | Re-prompts until explicit y/n or cancel |
 | **Command Runner (`_run_confirm`)** | Execution logging | Echo command `▶ ...`, `_confirm`, log to state file, exec | Command execution or abort | Requires explicit confirmation |

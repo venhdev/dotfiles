@@ -60,6 +60,12 @@ The installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`:
 - `git lga` → full history
 - `git inf` → quick branch status and remote summary
 
+## Shell & History Helpers
+
+- `h <keyword>` → grep command history
+- `he [keyword] [limit]` → search and interactively execute recent command (default limit: 10, e.g. `he python` or `he python 5`)
+- `conf` → interactive config file opener (`conf` or `conf <alias>`)
+
 ## Uninstall
 
 ```bash
