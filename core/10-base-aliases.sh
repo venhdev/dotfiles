@@ -51,7 +51,20 @@ aautoremove() {
     echo "Cancelled"
 }
 
+# PROCESS & SYSTEM MONITORING
 alias pg='ps aux | grep'
+topmem() {
+  local count="${1:-15}"
+  [[ "$count" =~ ^[0-9]+$ ]] || count=15
+  ps -eo pid,ppid,rss,%mem,cmd --sort=-rss | head -n "$((count + 1))"
+}
+topcpu() {
+  local count="${1:-15}"
+  [[ "$count" =~ ^[0-9]+$ ]] || count=15
+  ps -eo pid,ppid,%cpu,%mem,cmd --sort=-%cpu | head -n "$((count + 1))"
+}
+alias psmem='topmem'
+alias pscpu='topcpu'
 
 # FILE & SYSTEM & NAVIGATION
 alias ..='cd ..'
