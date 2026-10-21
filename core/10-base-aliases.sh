@@ -188,6 +188,7 @@ he() {
   fi
 }
 alias cls='clear'
+alias cl='clear'
 
 alias cx='chmod +x'
 alias chownme='sudo chown -R $USER:$USER'
