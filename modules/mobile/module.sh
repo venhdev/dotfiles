@@ -522,12 +522,17 @@ _shorebird_dart_args() {
   return 0
 }
 
-sbr() {
+_flsb_release() {
   local dry_run=0
   local artifact current flavor
   local cmd=() args=()
 
-  [[ ${1:-} == -n ]] && dry_run=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--dry-run) dry_run=1; shift ;;
+      *) break ;;
+    esac
+  done
 
   _shorebird_preflight || return
   command -v fvm &>/dev/null || {
@@ -556,12 +561,17 @@ sbr() {
   _run_confirm "${cmd[@]}"
 }
 
-sbp() {
+_flsb_patch() {
   local dry_run=0
   local track current flavor
   local cmd=() args=()
 
-  [[ ${1:-} == -n ]] && dry_run=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -n|--dry-run) dry_run=1; shift ;;
+      *) break ;;
+    esac
+  done
 
   _shorebird_preflight || return
 
@@ -584,3 +594,83 @@ sbp() {
 
   _run_confirm "${cmd[@]}"
 }
+
+_flsb_help() {
+  cat <<'EOF'
+flsb - Flutter Shorebird helper
+
+Usage:
+  flsb <command> [options]
+
+Commands:
+  release, r [-n|--dry-run]   Release Android app via Shorebird & FVM
+  patch, p   [-n|--dry-run]   Patch Android app via Shorebird
+  preview                     Preview releases/patches (shorebird preview)
+  doctor                      Check Shorebird and environment
+  help, -h                    Show this help message
+  <any>                       Forward directly to shorebird CLI
+
+Options:
+  -n, --dry-run               Run build without uploading/submitting
+
+Shortcuts:
+  sbr                         Shortcut for 'flsb release'
+  sbp                         Shortcut for 'flsb patch'
+  sb                          Shortcut for 'flsb'
+EOF
+}
+
+flsb() {
+  local subcmd="${1:-}"
+  case "$subcmd" in
+    release|r)
+      shift
+      _flsb_release "$@"
+      ;;
+    patch|p)
+      shift
+      _flsb_patch "$@"
+      ;;
+    preview)
+      shift
+      _shorebird_preflight || return
+      shorebird preview "$@"
+      ;;
+    doctor)
+      shift
+      command -v shorebird &>/dev/null || {
+        echo "❌ shorebird not found" >&2
+        return 1
+      }
+      shorebird doctor "$@"
+      ;;
+    help|-h|--help|"")
+      _flsb_help
+      ;;
+    *)
+      command -v shorebird &>/dev/null || {
+        echo "❌ shorebird not found" >&2
+        return 1
+      }
+      shorebird "$@"
+      ;;
+  esac
+}
+
+sbr() { flsb release "$@"; }
+sbp() { flsb patch "$@"; }
+sb() { flsb "$@"; }
+
+if [[ -n "${BASH_VERSION:-}" ]] && command -v complete &>/dev/null; then
+  _flsb_completions() {
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    local prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    if [[ $COMP_CWORD -eq 1 ]]; then
+      COMPREPLY=($(compgen -W "release patch preview doctor help" -- "$cur"))
+    elif [[ "$prev" == "release" || "$prev" == "patch" || "$prev" == "r" || "$prev" == "p" ]]; then
+      COMPREPLY=($(compgen -W "-n --dry-run" -- "$cur"))
+    fi
+  }
+  complete -F _flsb_completions flsb sb 2>/dev/null || true
+fi
