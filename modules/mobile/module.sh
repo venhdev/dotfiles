@@ -1,5 +1,9 @@
 # Mobile development helpers (ADB, Flutter, Shorebird)
 
+# --- Android keystore helpers ---
+
+alias debugkey='keytool -list -v -keystore "${HOME}/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android'
+
 # --- ADB helpers ---
 
 _adb_devices() {
@@ -95,11 +99,11 @@ adbid() {
   mapfile -t apks < <(_adb_pick_apks "${1:-}" "${2:-}")
   ((${#apks[@]})) || { echo "❌ No APK"; return 1; }
 
-  echo
   for t in "${targets[@]}"; do
     m=$(_adb_model "$t")
+    printf '\n▶ %s | %s\n' "$t" "$m"
     for apk in "${apks[@]}"; do
-      echo "▶ [$m] adb -s $t install -r $apk"
+      _print_cmdline adb -s "$t" install -r "$apk"
     done
   done
 
@@ -219,6 +223,7 @@ _flutter_pick_flavor() {
     f=$(_pick_one "Flavor: " "${flavors[@]}" skip) || return
     [[ $f != skip ]] && echo "$f"
   else
+    _prompt_gap
     read -rp "Flavor (skip=Enter): " f
     [[ -n $f ]] && echo "$f"
   fi
@@ -229,6 +234,7 @@ _flutter_pick_flavor() {
 _flutter_pick_mode() {
   local PS3="Mode: " mode
 
+  _prompt_gap
   select mode in debug profile release; do
     echo "${mode:-debug}"
     return
@@ -304,11 +310,13 @@ _flutter_pick_env() {
   fi
 
   if ((${#candidates[@]} == 0)); then
+    _prompt_gap
     read -rp "dart-define-from-file (skip=Enter): " choice
     echo "$choice"
     return 0
   fi
 
+  _prompt_gap
   echo "Env file:" >&2
   local i
   for i in "${!candidates[@]}"; do
@@ -384,6 +392,7 @@ _flutter_pick_platform() {
   )
   local choice i
 
+  _prompt_gap
   echo "Platform:" >&2
   for i in "${!items[@]}"; do
     if ((i == 0)); then
@@ -408,6 +417,7 @@ _flutter_pick_platform() {
         ;;
       3|"ios"|"ios (comming soon)"|"ios (coming soon)")
         echo "❌ ios is disabled (comming soon)" >&2
+        _prompt_gap
         ;;
       4|"web")
         echo "web"
@@ -415,6 +425,7 @@ _flutter_pick_platform() {
         ;;
       *)
         echo "❌ Invalid platform: $choice" >&2
+        _prompt_gap
         ;;
     esac
   done
@@ -441,6 +452,7 @@ _flutter_pick_target() {
   ((${#targets[@]})) || return 0
 
   local def="${targets[0]}" choice i
+  _prompt_gap
   echo "Target:" >&2
   for i in "${!targets[@]}"; do
     if [[ ${targets[i]} == "$def" ]]; then
@@ -467,6 +479,7 @@ _flutter_pick_target() {
     done
 
     echo "❌ Invalid target: $choice" >&2
+    _prompt_gap
   done
 }
 
@@ -549,6 +562,7 @@ _shorebird_pick() {
   local label="$1" def="$2" v opt
   shift 2
 
+  _prompt_gap
   read -rp "$label ($*, Enter=$def): " v
   v="${v:-$def}"
 

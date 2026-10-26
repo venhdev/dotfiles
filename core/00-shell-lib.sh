@@ -34,10 +34,16 @@ showfunc() {
 
 _CMD_LOG="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/commands.log"
 
+# Separate consecutive prompt blocks without polluting captured stdout.
+_prompt_gap() {
+  printf '\n' >&2
+}
+
 _confirm() {
   local prompt="${1:-OK? [Y/n] }"
   local a default="y"
   [[ $prompt =~ \[y/N\] ]] && default="n"
+  _prompt_gap
   read -rp "$prompt" a
   [[ ${a:-$default} =~ ^[Yy]$ ]]
 }
@@ -52,8 +58,25 @@ _log_cmd() {
   } >>"$_CMD_LOG"
 }
 
+# Print the label/icon and the command on separate lines so the command can be
+# selected and copied without picking up the prefix.
+_print_cmdline() {
+  local cmd
+  printf -v cmd '%q ' "$@"
+  printf '%s\n' "${cmd% }"
+}
+
+_print_cmd() {
+  local label="$1"
+  shift
+
+  printf '▶ %s\n' "$label"
+  _print_cmdline "$@"
+}
+
 _run_confirm() {
-  printf '\n▶'; printf ' %q' "$@"; echo
+  printf '\n'
+  _print_cmd "Command:" "$@"
 
   _confirm || {
     echo "✗ cancelled"
@@ -71,6 +94,7 @@ _pick_one() {
   (($#)) || return 1
   (($# == 1)) && { echo "$1"; return; }
 
+  _prompt_gap
   select item in "$@"; do
     [[ -n $item ]] && { echo "$item"; return; }
   done
@@ -84,6 +108,7 @@ _pick_many() {
   ((${#items[@]})) || return 1
   ((${#items[@]} == 1)) && { echo "${items[0]}"; return; }
 
+  _prompt_gap
   echo "$title" >&2
   for n in "${!items[@]}"; do
     printf '  %d) %s\n' "$((n+1))" "${items[n]}" >&2
