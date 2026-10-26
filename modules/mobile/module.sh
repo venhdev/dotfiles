@@ -31,24 +31,53 @@ _adb_pick_devices() {
   done
 }
 
-_adb_pick_apks() {
-  local root_dir="." filter=""
-  if [[ -n "${1:-}" ]]; then
-    if [[ -d "$1" ]]; then
-      root_dir="$1"
-      filter="${2:-}"
+# _adb_apk_scope <root_var> <filter_var> [arg] [filter]
+# First arg is treated as a directory when it exists, otherwise as a filter.
+_adb_apk_scope() {
+  local -n _root_ref="$1" _filter_ref="$2"
+  _root_ref="."
+  _filter_ref=""
+  if [[ -n "${3:-}" ]]; then
+    if [[ -d "$3" ]]; then
+      _root_ref="$3"
+      _filter_ref="${4:-}"
     else
-      root_dir="."
-      filter="$1"
+      _filter_ref="$3"
     fi
   fi
+}
 
-  local apks=() f
+# _adb_find_apks <root_dir> [filter]
+_adb_find_apks() {
+  local root_dir="${1:-.}" filter="${2:-}" f
   while IFS= read -r f; do
-    [[ -n $f && ( -z $filter || $f == *"$filter"* ) ]] && apks+=("$f")
-  done < <(find "$root_dir" -not -path '*/.*' -type f -name "*.apk" -printf '%T@ %p\n' 2>/dev/null | sort -nr | cut -d' ' -f2-)
+    [[ -n $f && ( -z $filter || $f == *"$filter"* ) ]] && printf '%s\n' "$f"
+  done < <(
+    find "$root_dir" -not -path '*/.*' -type f -name "*.apk" -printf '%T@ %p\n' 2>/dev/null |
+      sort -nr |
+      cut -d' ' -f2-
+  )
+}
 
+_adb_pick_apks() {
+  local root_dir filter apks=()
+  _adb_apk_scope root_dir filter "${1:-}" "${2:-}"
+  mapfile -t apks < <(_adb_find_apks "$root_dir" "$filter")
   _pick_many "📦 Select APK(s):" "${apks[@]}"
+}
+
+# lsapk [dir] [filter] - list APK files, newest first
+lsapk() {
+  local root_dir filter apks=()
+  _adb_apk_scope root_dir filter "${1:-}" "${2:-}"
+  mapfile -t apks < <(_adb_find_apks "$root_dir" "$filter")
+
+  ((${#apks[@]})) || {
+    echo "❌ No APK found" >&2
+    return 1
+  }
+
+  printf '%s\n' "${apks[@]}"
 }
 
 adbls() {
@@ -93,6 +122,9 @@ adbid() {
 }
 
 # Flutter web browser integration
+_dotfiles_root="${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
+_chrome_wrapper="$_dotfiles_root/modules/mobile/chrome-wrapper.sh"
+
 if [[ -z "${CHROME_EXECUTABLE:-}" ]]; then
   for _c in \
     "${DOTFILES_CHROME_EXECUTABLE:-}" \
@@ -106,6 +138,21 @@ if [[ -z "${CHROME_EXECUTABLE:-}" ]]; then
   done
   unset _c
 fi
+
+# WSL: Flutter runs as Linux but CHROME_EXECUTABLE may point at a Windows .exe.
+# Flutter runs `<chrome> --version` during device discovery, which Windows
+# Chrome handles by launching a browser window instead of printing a version.
+# Route it through a small wrapper so `flr`/`flutter devices` do not pop Chrome.
+if [[ -n "${CHROME_EXECUTABLE:-}" && -x "$_chrome_wrapper" && "$CHROME_EXECUTABLE" != "$_chrome_wrapper" ]]; then
+  _chrome_real="$(readlink -f "$CHROME_EXECUTABLE" 2>/dev/null || printf '%s' "$CHROME_EXECUTABLE")"
+  if [[ "${_chrome_real,,}" == *.exe ]]; then
+    export DOTFILES_CHROME_EXECUTABLE="$_chrome_real"
+    export CHROME_EXECUTABLE="$_chrome_wrapper"
+  fi
+  unset _chrome_real
+fi
+
+unset _dotfiles_root _chrome_wrapper
 
 # --- Flutter helpers ---
 
