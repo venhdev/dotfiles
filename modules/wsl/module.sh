@@ -65,7 +65,5 @@ wcp() {
   [[ $dst =~ ^[A-Za-z]:[\\/].* ]] && dst=$(wslpath -u "$dst")
 
   echo "$src → $dst"
-  _confirm "Confirm? [Y/n] " || return 1
-
-  cp "$src" "$dst"
+  _run_confirm cp "$src" "$dst"
 }

@@ -21,7 +21,8 @@ Standardized interactive patterns across dotfiles (`core/00-shell-lib.sh`, `inst
 | **History Exec (`he`)** | Interactive shell history | Numeric index (`1-N`); `[Enter]` default (1=latest), `[q]` cancel | Direct command execution in shell session | Cancels on non-interactive / EOF |
 | **Confirm Gate (`_confirm`)** | Pre-execution safety | `[y/N]` or `[Y/n]` via `read -rp` | Return code `0` (yes) / `1` (no) | Fails safe (aborts) |
 | **Installer Confirm (`prompt_yes_no`)** | Final install gate | Explicit `[y/n]`; Enter re-prompts | Return code `0` (yes) / `1` (no) | Re-prompts until explicit y/n or cancel |
-| **Command Runner (`_run_confirm`)** | Execution logging | Echo command `▶ ...`, `_confirm`, log to state file, exec | Command execution or abort | Requires explicit confirmation |
+| **Command Runner (`_run_confirm`)** | Execution logging | Echo command `▶ ...`, `_confirm`, log metadata (status, dur, cwd) to state file, exec | Command execution or abort | Requires explicit confirmation |
+| **Command Log & Rerun (`cmdlog` / `clog` / `cr`)** | Audit trail & rerun | View, search keyword, filter by CWD (`-d`), interactive rerun, edit-before-run (`-e`), clip | Interactive menu or direct execution | Fallback to tabular list |
 
 ## 2. Terminal Lifecycle Contract
 
@@ -48,4 +49,4 @@ Standardized interactive patterns across dotfiles (`core/00-shell-lib.sh`, `inst
 
 1. **Explicit TTY Isolation**: Interactive prompts must explicitly read/write to `/dev/tty` so scripts function when piped into bash (`curl ... | bash`).
 2. **Safe Defaults**: Any destructive, state-mutating, or Windows-integration prompt must provide an explicit `[None]` / skip path and fail closed on abort.
-3. **Audit Trail**: Any execution gated by `_run_confirm` must append timestamped, shell-quoted invocations to `$_CMD_LOG` (`~/.local/state/dotfiles/commands.log`).
+3. **Audit Trail**: Any execution gated by `_run_confirm` must append timestamped, shell-quoted invocations along with execution status, duration, and working directory to `$_CMD_LOG` (`~/.local/state/dotfiles/commands.log`), accessible and actionable via `cmdlog` / `clog` and `cr`.

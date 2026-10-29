@@ -48,22 +48,52 @@ _confirm() {
   [[ ${a:-$default} =~ ^[Yy]$ ]]
 }
 
-_log_cmd() {
+_format_cmdline() {
+  if (($# == 1)) && [[ "$1" =~ [[:space:]] ]]; then
+    printf '%s' "$1"
+    return
+  fi
+
+  local arg out=""
+  for arg in "$@"; do
+    if [[ -z $arg ]]; then
+      out+="${out:+ }''"
+    elif [[ "$arg" == *" "* || "$arg" == *$'\t'* || "$arg" == *$'\n'* || "$arg" == *"'"* ]]; then
+      local quoted="'${arg//\'/\'\\\'\'}'"
+      out+="${out:+ }$quoted"
+    else
+      local q
+      printf -v q '%q' "$arg"
+      out+="${out:+ }$q"
+    fi
+  done
+  printf '%s' "$out"
+}
+
+_log_cmd_record() {
+  local status="$1" duration="$2" cwd="$3"
+  shift 3
   mkdir -p "$(dirname "$_CMD_LOG")"
 
+  local cmd_str
+  cmd_str="$(_format_cmdline "$@")"
+
   {
-    printf '[%s] ' "$(date '+%F %T')"
-    printf '%q ' "$@"
-    printf '\n'
+    printf '[%s] [status:%s] [dur:%ss] [cwd:%s] ▶ %s\n' \
+      "$(date '+%F %T')" "$status" "$duration" "$cwd" "$cmd_str"
   } >>"$_CMD_LOG"
+}
+
+_log_cmd() {
+  local cwd="${PWD:-$HOME}"
+  _log_cmd_record "0" "0" "$cwd" "$@"
 }
 
 # Print the label/icon and the command on separate lines so the command can be
 # selected and copied without picking up the prefix.
 _print_cmdline() {
-  local cmd
-  printf -v cmd '%q ' "$@"
-  printf '%s\n' "${cmd% }"
+  _format_cmdline "$@"
+  printf '\n'
 }
 
 _print_cmd() {
@@ -83,8 +113,16 @@ _run_confirm() {
     return 1
   }
 
-  _log_cmd "$@"
-  "$@"
+  local start_time=$SECONDS
+  local cwd="${PWD:-$HOME}"
+  local rc=0
+
+  "$@" || rc=$?
+
+  local duration=$((SECONDS - start_time))
+  _log_cmd_record "$rc" "$duration" "$cwd" "$@"
+
+  return $rc
 }
 
 _pick_one() {

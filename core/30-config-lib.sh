@@ -17,6 +17,8 @@ conf() {
     [docker]="$HOME/.docker/config.json"
     [oc]="$HOME/.openclaw/openclaw.json"
     [opencode]="$HOME/.config/opencode/opencode.json"
+    [cmdlog]="$dotfiles/core/15-cmdlog-lib.sh"
+    [clog]="$dotfiles/core/15-cmdlog-lib.sh"
   )
 
   local f k="${1:-}" x l

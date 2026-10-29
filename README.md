@@ -9,6 +9,7 @@ dotfiles/
 ├── core/                        # Always loaded
 │   ├── 00-shell-lib.sh          # Utilities (_confirm, _log_cmd, pickers)
 │   ├── 10-base-aliases.sh       # Base aliases (nav, systemctl, safe apt)
+│   ├── 15-cmdlog-lib.sh         # Confirmed command audit log & rerun (clog, cr)
 │   ├── 20-editor-lib.sh         # Auto-detect or configured EDITOR
 │   ├── 30-config-lib.sh         # Quick config opener (conf)
 │   └── 40-info-lib.sh           # Diagnostics (sysinfo, envinfo)
@@ -65,6 +66,8 @@ The installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`:
 
 - `h <keyword>` → grep command history
 - `he [keyword] [limit]` → search and interactively execute recent command (default limit: 10, e.g. `he python` or `he python 5`)
+- `clog [query] [limit]` → view confirmed command history (`clog -d` to filter by current `$PWD`)
+- `cr [query|index]` → search/pick and rerun confirmed command (`cr -e` to edit before running)
 - `conf` → interactive config file opener (`conf` or `conf <alias>`)
 
 ## Uninstall

@@ -45,10 +45,7 @@ alias asearch='apt search'
 alias afix='sudo apt --fix-broken install'
 aautoremove() {
   sudo apt autoremove --dry-run
-
-  _confirm "Continue? [y/N] " &&
-    sudo apt autoremove ||
-    echo "Cancelled"
+  _run_confirm sudo apt autoremove
 }
 
 # PROCESS & SYSTEM MONITORING
