@@ -37,7 +37,9 @@ clip() {
       fi
       ;;
     wsl|msys)
-      local clip_exe="${DOTFILES_WIN_PATH:-/mnt/c/Windows}/System32/clip.exe"
+      local default_win_dir="/mnt/c/Windows"
+      [[ -d "/c/Windows" ]] && default_win_dir="/c/Windows"
+      local clip_exe="${DOTFILES_WIN_PATH:-$default_win_dir}/System32/clip.exe"
       if [[ -x "$clip_exe" ]]; then
         "$clip_exe" "$@"
         return $?

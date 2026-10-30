@@ -1,6 +1,8 @@
 # Windows / WSL helpers
 
-_WIN="${DOTFILES_WIN_PATH:-/mnt/c/Windows}"
+_default_win_dir="/mnt/c/Windows"
+[[ -d "/c/Windows" ]] && _default_win_dir="/c/Windows"
+_WIN="${DOTFILES_WIN_PATH:-$_default_win_dir}"
 _CLIP="$_WIN/System32/clip.exe"
 _EXPLORER="$_WIN/explorer.exe"
 _POWERSHELL="$_WIN/System32/WindowsPowerShell/v1.0/powershell.exe"

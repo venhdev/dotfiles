@@ -376,7 +376,15 @@ if (( ${#detected_ssh_keys[@]} > 0 )); then
   auto_key="${detected_ssh_keys[0]}"
 fi
 default_ssh="${existing_ssh_init:-$auto_key}"
-default_win="${existing_win_path:-/mnt/c/Windows}"
+if [[ -n "${existing_win_path:-}" ]]; then
+  default_win="$existing_win_path"
+elif [[ -d "/c/Windows" ]]; then
+  default_win="/c/Windows"
+elif [[ -d "/mnt/c/Windows" ]]; then
+  default_win="/mnt/c/Windows"
+else
+  default_win="/mnt/c/Windows"
+fi
 
 # Module definitions:
 # index 0: [ALL]
