@@ -71,7 +71,7 @@ if ($existingContent -like "*$markerStart*") {
 
 # 3. Global Git Configuration Integration
 $gitConfigPath = "$TargetDir\.gitconfig"
-if (Get-Command git -ErrorAction SilentlyContinue -and (Test-Path $gitConfigPath)) {
+if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path $gitConfigPath)) {
     $currentIncludes = git config --global --get-all include.path 2>$null
     if ($currentIncludes -notcontains $gitConfigPath) {
         Write-Host "Configuring global git include.path -> $gitConfigPath" -ForegroundColor Green
