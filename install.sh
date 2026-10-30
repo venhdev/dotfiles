@@ -705,6 +705,24 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
+# 7. Windows PowerShell Integration (when installing from Git Bash/MSYS)
+if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
+  for ps_doc in "$HOME/Documents/PowerShell" "$HOME/Documents/WindowsPowerShell"; do
+    ps_prof="$ps_doc/Microsoft.PowerShell_profile.ps1"
+    mkdir -p "$ps_doc"
+    touch "$ps_prof"
+    if ! grep -Fq "# Load dotfiles" "$ps_prof" 2>/dev/null; then
+      cat >>"$ps_prof" <<'PS_EOF'
+
+# Load dotfiles
+$global:DOTFILES_DIR = "$env:USERPROFILE\.config\dotfiles"
+$dotfilesLoader = "$global:DOTFILES_DIR\powershell\profile.ps1"
+if (Test-Path $dotfilesLoader) { . $dotfilesLoader }
+PS_EOF
+    fi
+  done
+fi
+
 # 7. Common CLI Tools (if selected)
 if (( selected[7] )); then
   if [[ -f "$DIR/scripts/install-tools.sh" ]]; then
