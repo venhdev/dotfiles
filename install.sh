@@ -29,17 +29,22 @@ MARKER="# Load dotfiles"
 
 # Parse CLI arguments
 OPT_ALL=0
+OPT_FORCE=0
 OPT_MODULES=()
 for arg in "$@"; do
   case "$arg" in
     -a|--all)
       OPT_ALL=1
       ;;
+    -f|--force)
+      OPT_FORCE=1
+      ;;
     -h|--help)
       echo "Usage: ./install.sh [OPTIONS] [MODULE...]"
       echo
       echo "Options:"
       echo "  -a, --all    Install all modules with defaults (non-interactive)"
+      echo "  -f, --force  Force re-installation even if already up to date"
       echo "  -h, --help   Show this help message"
       echo
       echo "Modules: ssh, wsl, mobile, docker, ai, gitconfig (or git), tools"
@@ -302,10 +307,19 @@ _probe_windows_tools() {
 }
 
 # 1. Update or clone repository
-if [[ -d "$DIR/.git" ]]; then
+if [[ -n "${DOTFILES_REEXEC:-}" ]]; then
+  ACTION=updated
+elif [[ -d "$DIR/.git" ]]; then
   if pull_output="$(git -C "$DIR" pull --ff-only 2>&1)"; then
     [ -n "$pull_output" ] && printf '%s\n' "$pull_output"
     ACTION=updated
+
+    # If already up to date, dotfiles is configured, and running non-interactive --all without force flag:
+    if [[ "$pull_output" == *"Already up to date."* && -f "$DIR/local/local.env" ]]; then
+      if (( OPT_ALL )) && (( ${#OPT_MODULES[@]} == 0 )) && (( ${OPT_FORCE:-0} == 0 )); then
+        exit 0
+      fi
+    fi
   else
     pull_exit=$?
     if is_worktree_dirty && is_local_change_pull_error "$pull_output"; then
