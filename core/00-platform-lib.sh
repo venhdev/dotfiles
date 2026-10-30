@@ -1,13 +1,21 @@
 # Cross-platform environment detection and standard OS primitives (Linux, macOS, Windows)
 
-# Detect Operating System and Environment
+# Detect Operating System Family
 _detect_os() {
+  if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
+    echo "msys"
+    return
+  fi
+
   local uname_out
   uname_out="$(uname -s 2>/dev/null || echo "Unknown")"
 
   case "$uname_out" in
     Darwin*)
       echo "darwin"
+      ;;
+    MSYS*|MINGW*|CYGWIN*)
+      echo "msys"
       ;;
     Linux*)
       if [[ -n "${WSL_DISTRO_NAME:-}" ]] || [[ "$(uname -r 2>/dev/null)" == *[Mm]icrosoft* ]] || [[ -f /proc/version && "$(< /proc/version)" == *[Mm]icrosoft* ]]; then
@@ -16,16 +24,50 @@ _detect_os() {
         echo "linux"
       fi
       ;;
-    MSYS*|MINGW*|CYGWIN*)
-      echo "msys"
-      ;;
     *)
       echo "unknown"
       ;;
   esac
 }
 
+# Detect Linux Distribution Family (from /etc/os-release)
+_detect_distro() {
+  if [[ -f /etc/os-release ]]; then
+    local id="" id_like=""
+    id="$(grep -E '^ID=' /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '"'"'" | tr '[:upper:]' '[:lower:]')"
+    id_like="$(grep -E '^ID_LIKE=' /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '"'"'" | tr '[:upper:]' '[:lower:]')"
+    echo "${id:-${id_like:-linux}}"
+  else
+    echo "unknown"
+  fi
+}
+
+# Detect Windows Host System Directory
+_detect_win_dir() {
+  if [[ -n "${DOTFILES_WIN_PATH:-}" && -d "$DOTFILES_WIN_PATH" ]]; then
+    echo "$DOTFILES_WIN_PATH"
+  elif [[ -d "/c/Windows" ]]; then
+    echo "/c/Windows"
+  elif [[ -d "/mnt/c/Windows" ]]; then
+    echo "/mnt/c/Windows"
+  else
+    echo "/mnt/c/Windows"
+  fi
+}
+
 _OS_TYPE="$(_detect_os)"
+_LINUX_DISTRO="$(_detect_distro)"
+_WIN_DIR="$(_detect_win_dir)"
+
+# SSOT Boolean Helper Functions
+is_darwin() { [[ "$_OS_TYPE" == "darwin" ]]; }
+is_mac() { is_darwin; }
+is_wsl() { [[ "$_OS_TYPE" == "wsl" ]]; }
+is_msys() { [[ "$_OS_TYPE" == "msys" ]]; }
+is_linux() { [[ "$_OS_TYPE" == "linux" || "$_OS_TYPE" == "wsl" ]]; }
+is_pure_linux() { [[ "$_OS_TYPE" == "linux" ]]; }
+is_windows() { [[ "$_OS_TYPE" == "msys" || "$_OS_TYPE" == "wsl" ]]; }
+has_apt() { command -v apt-get >/dev/null 2>&1; }
 
 # Cross-platform clipboard helper
 clip() {
@@ -37,9 +79,7 @@ clip() {
       fi
       ;;
     wsl|msys)
-      local default_win_dir="/mnt/c/Windows"
-      [[ -d "/c/Windows" ]] && default_win_dir="/c/Windows"
-      local clip_exe="${DOTFILES_WIN_PATH:-$default_win_dir}/System32/clip.exe"
+      local clip_exe="${DOTFILES_WIN_PATH:-$_WIN_DIR}/System32/clip.exe"
       if [[ -x "$clip_exe" ]]; then
         "$clip_exe" "$@"
         return $?

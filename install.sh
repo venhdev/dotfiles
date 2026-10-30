@@ -4,10 +4,22 @@ set -e
 REPO="https://github.com/venhdev/dotfiles.git"
 DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
 
+# Load SSOT platform detection library if present, or provide minimal bootstrap fallbacks
+if [[ -f "$DIR/core/00-platform-lib.sh" ]]; then
+  . "$DIR/core/00-platform-lib.sh"
+elif [[ -f "${BASH_SOURCE[0]%/*}/core/00-platform-lib.sh" ]]; then
+  . "${BASH_SOURCE[0]%/*}/core/00-platform-lib.sh"
+else
+  is_darwin() { [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; }
+  is_wsl() { [[ -n "${WSL_DISTRO_NAME:-}" ]] || [[ "$(uname -r 2>/dev/null)" == *[Mm]icrosoft* ]] || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; }
+  is_msys() { [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$(uname -s 2>/dev/null)" == MSYS* || "$(uname -s 2>/dev/null)" == MINGW* ]]; }
+  has_apt() { command -v apt-get >/dev/null 2>&1; }
+fi
+
 # Auto-detect shell RC target (Zsh on macOS/Linux vs standard Bash)
 if [[ -n "${DOTFILES_BASHRC:-}" ]]; then
   RC_FILE="$DOTFILES_BASHRC"
-elif [[ "${SHELL:-}" == *"zsh"* ]] || [[ "$(uname -s 2>/dev/null)" == "Darwin" && -f "$HOME/.zshrc" ]]; then
+elif [[ "${SHELL:-}" == *"zsh"* ]] || { is_darwin && [[ -f "$HOME/.zshrc" ]]; }; then
   RC_FILE="${ZDOTDIR:-$HOME}/.zshrc"
 else
   RC_FILE="$HOME/.bashrc"
@@ -382,10 +394,10 @@ fi
 default_ssh="${existing_ssh_init:-$auto_key}"
 if [[ -n "${existing_win_path:-}" ]]; then
   default_win="$existing_win_path"
+elif [[ -n "${_WIN_DIR:-}" ]]; then
+  default_win="$_WIN_DIR"
 elif [[ -d "/c/Windows" ]]; then
   default_win="/c/Windows"
-elif [[ -d "/mnt/c/Windows" ]]; then
-  default_win="/mnt/c/Windows"
 else
   default_win="/mnt/c/Windows"
 fi
@@ -421,7 +433,7 @@ fi
 
 if [[ -L "$DIR/enabled.d/50-wsl.sh" ]]; then
   selected[2]=1
-elif grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+elif is_wsl; then
   selected[2]=1
 fi
 
@@ -554,7 +566,7 @@ if (( OPT_ALL )); then
   done
   # On systems without apt (e.g. Windows Git Bash, macOS, non-Debian Linux),
   # do not auto-select the apt-based tools installer during --all
-  if ! command -v apt-get >/dev/null 2>&1; then
+  if ! has_apt; then
     selected[7]=0
   fi
   if [[ -d "$default_win" ]]; then
@@ -598,7 +610,7 @@ elif can_prompt_interactively; then
 
   if (( selected[2] )); then
     wsl_path_info=""
-    if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    if is_wsl; then
       ap_val=$(awk -F'=' '/^[[:space:]]*appendWindowsPath[[:space:]]*=/ {gsub(/[[:space:]]/, "", $2); val=tolower($2)} END {if (val=="false" || val=="true") print val; else print "default/true"}' /etc/wsl.conf 2>/dev/null || echo "default/true")
       wsl_path_info=" (appendWindowsPath: $ap_val)"
     fi
@@ -717,7 +729,7 @@ if command -v git >/dev/null 2>&1; then
 fi
 
 # 7. Windows PowerShell Integration (when installing from Git Bash/MSYS)
-if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
+if is_msys; then
   for ps_doc in "$HOME/Documents/PowerShell" "$HOME/Documents/WindowsPowerShell"; do
     ps_prof="$ps_doc/Microsoft.PowerShell_profile.ps1"
     mkdir -p "$ps_doc"

@@ -1,7 +1,7 @@
 # Windows / WSL helpers
 
-_default_win_dir="/mnt/c/Windows"
-[[ -d "/c/Windows" ]] && _default_win_dir="/c/Windows"
+_default_win_dir="${_WIN_DIR:-/mnt/c/Windows}"
+[[ -d "/c/Windows" && -z "${_WIN_DIR:-}" ]] && _default_win_dir="/c/Windows"
 _WIN="${DOTFILES_WIN_PATH:-$_default_win_dir}"
 _CLIP="$_WIN/System32/clip.exe"
 _EXPLORER="$_WIN/explorer.exe"

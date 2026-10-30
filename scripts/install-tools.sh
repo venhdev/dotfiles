@@ -3,20 +3,33 @@ set -e
 
 # Common CLI tools installer (git, curl, jq, rg)
 
+# Source SSOT platform library if available
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_DOTFILES_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
+if [[ -f "$_DOTFILES_ROOT/core/00-platform-lib.sh" ]]; then
+  # shellcheck source=../core/00-platform-lib.sh
+  . "$_DOTFILES_ROOT/core/00-platform-lib.sh"
+else
+  # Minimal fallback functions if run in standalone mode
+  is_msys() { [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* || "$(uname -s 2>/dev/null)" == MSYS* ]]; }
+  is_darwin() { [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; }
+  has_apt() { command -v apt-get >/dev/null 2>&1; }
+fi
+
 # OS / Package manager pre-flight compatibility check
-if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
+if is_msys; then
   echo "Notice: Common CLI tools installer is not applicable on Windows (Git Bash)."
   echo "Git and curl are bundled with Git Bash. Use winget, choco, or scoop to manage Windows packages."
   exit 0
 fi
 
-if [[ "$(uname -s 2>/dev/null)" == "Darwin" ]]; then
+if is_darwin; then
   echo "Notice: Common CLI tools installer currently targets Debian/Ubuntu (apt)."
   echo "On macOS, please use Homebrew: brew install git curl jq ripgrep"
   exit 0
 fi
 
-if ! command -v apt-get >/dev/null 2>&1; then
+if ! has_apt; then
   echo "Notice: Common CLI tools installer currently only supports Debian/Ubuntu (apt). Skipping."
   exit 0
 fi

@@ -1,5 +1,8 @@
 # Cross-platform shims for Windows PowerShell (clip, open, pkg, sudo)
 
+# Detect Windows Host Environment (supports both PowerShell 5.1 Desktop and PowerShell Core 7+)
+$global:IsWindowsHost = ($PSEdition -eq 'Desktop') -or [bool]$IsWindows
+
 # Clipboard Helper
 function clip {
     param(

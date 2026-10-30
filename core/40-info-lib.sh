@@ -78,9 +78,12 @@ envinfo() {
 
   echo "=== System ==="
   _envinfo_print "OS" "uname -s"
+  if [[ -n "${_LINUX_DISTRO:-}" && "$_LINUX_DISTRO" != "unknown" ]]; then
+    _envinfo_print "Distro" "printf '%s' '$_LINUX_DISTRO'"
+  fi
   _envinfo_print "Kernel" "uname -r"
   _envinfo_print "Arch" "uname -m"
-  if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+  if is_wsl 2>/dev/null || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
     _envinfo_print "WSL Path" "awk -F'=' '/^[[:space:]]*appendWindowsPath[[:space:]]*=/ {gsub(/[[:space:]]/, \"\", \$2); val=tolower(\$2)} END {if (val==\"false\") print \"appendWindowsPath = false\"; else if (val==\"true\") print \"appendWindowsPath = true\"; else print \"appendWindowsPath = default/true\"}' /etc/wsl.conf 2>/dev/null || printf 'appendWindowsPath = default/true'"
   fi
   if (( has_timeout )); then
