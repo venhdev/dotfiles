@@ -18,6 +18,7 @@ function conf {
         "cmdlog"     = "$dotfiles\powershell\core\15-CmdLog.ps1"
         "ali"        = "$dotfiles\powershell\core\10-BaseAliases.ps1"
         "shims"      = "$dotfiles\powershell\core\00-PlatformShims.ps1"
+        "wsl"        = "$dotfiles\powershell\core\20-WslHost.ps1"
         "starship"   = "$env:USERPROFILE\.config\starship.toml"
     }
 
