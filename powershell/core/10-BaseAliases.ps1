@@ -12,7 +12,6 @@ function la { Get-ChildItem -Path (Get-Item -Path $PWD) -Force }
 Set-Alias -Name cl -Value Clear-Host -ErrorAction SilentlyContinue
 
 # Executable Path Lookup (equivalent to POSIX 'which')
-Set-Alias -Name wh -Value where.exe -ErrorAction SilentlyContinue
 Set-Alias -Name which -Value where.exe -ErrorAction SilentlyContinue
 
 # Profile edit shortcut (delegates to canonical 'conf profile')
