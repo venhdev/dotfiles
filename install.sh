@@ -347,7 +347,11 @@ if [[ -z "${DOTFILES_REEXEC:-}" ]]; then
 
   if [[ -z "$current_script" || "$current_script" != "$target_script" || "${pull_output:-}" != *"Already up to date."* ]]; then
     export DOTFILES_REEXEC=1
-    exec bash "$DIR/install.sh" "$@"
+    if can_prompt_interactively && [[ ! -t 0 ]]; then
+      exec bash "$DIR/install.sh" "$@" < /dev/tty
+    else
+      exec bash "$DIR/install.sh" "$@"
+    fi
   fi
 fi
 
@@ -403,7 +407,7 @@ menu_labels=(
   "docker    - Docker Shortcuts (dps, dcl cleanup)"
   "ai        - AI & Agent Tools (Claude, OpenClaw, Skills CLI)"
   "gitconfig - Git Aliases & Config (lg, lga, inf, br, co, ...)"
-  "tools     - Common CLI Tools (Install/verify git, curl, jq, rg)"
+  "tools     - Common CLI Tools (Debian/Ubuntu apt: git, curl, jq, rg)"
 )
 num_items=${#modules[@]}
 selected=(0 0 0 0 0 0 0 0)
@@ -548,6 +552,11 @@ if (( OPT_ALL )); then
   for ((idx=1; idx<num_items; idx++)); do
     selected[idx]=1
   done
+  # On systems without apt (e.g. Windows Git Bash, macOS, non-Debian Linux),
+  # do not auto-select the apt-based tools installer during --all
+  if ! command -v apt-get >/dev/null 2>&1; then
+    selected[7]=0
+  fi
   if [[ -d "$default_win" ]]; then
     win_path_val="$default_win"
     _probe_windows_tools "$win_path_val"
@@ -632,6 +641,8 @@ elif can_prompt_interactively; then
 
   if (( selected[7] )); then
     printf "   \033[1;32m[✔] tools\033[0m     -> Common CLI tools (git, curl, jq, rg)\n" >/dev/tty
+  else
+    printf "   \033[90m[ ] tools     -> Disabled\033[0m\n" >/dev/tty
   fi
   printf "\n" >/dev/tty
 
@@ -726,7 +737,11 @@ fi
 # 7. Common CLI Tools (if selected)
 if (( selected[7] )); then
   if [[ -f "$DIR/scripts/install-tools.sh" ]]; then
-    bash "$DIR/scripts/install-tools.sh"
+    if (( OPT_ALL )); then
+      bash "$DIR/scripts/install-tools.sh" --all
+    else
+      bash "$DIR/scripts/install-tools.sh"
+    fi
   fi
 fi
 
