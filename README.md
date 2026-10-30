@@ -80,11 +80,10 @@ The installer adds `~/.config/dotfiles/.gitconfig` to global Git `include.path`:
 
 ## Shell & History Helpers
 
-- `h <keyword>` → grep command history
-- `he [keyword] [limit]` → search and interactively execute recent command (default limit: 10, e.g. `he python` or `he python 5`)
-- `clog [query] [limit]` → view confirmed command history (`clog -d` to filter by current `$PWD`)
-- `cr [query|index]` → search/pick and rerun confirmed command (`cr -e` to edit before running)
-- `conf` → interactive config file opener (`conf` or `conf <alias>`)
+- `h [query] [limit]` → search and view command history (default limit: 10, e.g. `h flutter` or `h flutter 5`)
+- `clog [query] [limit]` → view confirmed command audit log (`clog -d` to filter by current `$PWD`)
+- `cr [query|index]` → search/pick and rerun confirmed command (`cr -e` to edit, `cr -d` scoped to `$PWD`)
+- `conf` → interactive config file opener (`conf` or `conf <target>`)
 
 ## Uninstall
 
