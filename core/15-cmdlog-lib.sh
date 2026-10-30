@@ -431,8 +431,11 @@ cmdlog() {
   esac
 }
 
-# Provide wrapper functions so clog and cr work in both interactive shells
-# and non-interactive subshells where alias expansion may be disabled.
+# Clean up any preexisting aliases from earlier sessions or dotfiles loads
+unalias clog cr 2>/dev/null || true
+
+# Provide wrapper functions so clog and cr work across interactive shells
+# and subshells without alias collision or re-source errors.
 clog() {
   cmdlog "$@"
 }
@@ -440,6 +443,3 @@ clog() {
 cr() {
   cmdlog run "$@"
 }
-
-alias clog='cmdlog'
-alias cr='cmdlog run'
