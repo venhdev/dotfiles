@@ -1,8 +1,9 @@
 # Base system, navigation, dev, and package management aliases
 
 # ENVIRONMENT & RELOAD
-alias rel='source ~/.bashrc'
+unalias rel 2>/dev/null || true
 alias rebash='exec bash'
+alias rezsh='exec zsh'
 alias insdf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
 alias instools='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/scripts/install-tools.sh"'
 alias insssh='insdf ssh'
@@ -17,36 +18,45 @@ alias ts='date +%s'
 alias va='source .venv/bin/activate'
 alias vd='deactivate'
 
-# SYSTEM CONTROL
-alias sc='systemctl'
-alias scu='systemctl --user'
-alias scr='sudo systemctl restart'
-alias scs='systemctl status'
-alias sce='sudo systemctl enable --now'
-alias scd='sudo systemctl disable --now'
-alias scdr='sudo systemctl daemon-reload'
-alias scedit='sudo systemctl edit --full'
+# SYSTEM CONTROL & JOURNAL (enabled when systemctl is present)
+if command -v systemctl &>/dev/null; then
+  alias sc='systemctl'
+  alias scu='systemctl --user'
+  alias scr='sudo systemctl restart'
+  alias scs='systemctl status'
+  alias sce='sudo systemctl enable --now'
+  alias scd='sudo systemctl disable --now'
+  alias scdr='sudo systemctl daemon-reload'
+  alias scedit='sudo systemctl edit --full'
 
-# JOURNAL
-alias jc='journalctl'
-alias jcs='journalctl -u'
-alias jcf='journalctl -f -u'
+  alias jc='journalctl'
+  alias jcs='journalctl -u'
+  alias jcf='journalctl -f -u'
+fi
 
 # SECURITY & NETWORK CHECK
 alias curlip='curl ifconfig.me' # Quick check of public IP
 alias ports_listen='sudo lsof -i -P -n | grep LISTEN' # Check what's hogging ports
 
-# APT PACKAGE MANAGEMENT
-alias aupdate='sudo apt update'
-alias aupgrade='sudo apt update && sudo apt upgrade -y'
-alias ainstall='sudo apt install'
-alias aremove='sudo apt remove'
-alias asearch='apt search'
-alias afix='sudo apt --fix-broken install'
-aautoremove() {
-  sudo apt autoremove --dry-run
-  _run_confirm sudo apt autoremove
-}
+# PACKAGE MANAGEMENT ALIASES (Apt on Debian/Ubuntu, or shims to universal pkg)
+if command -v apt-get &>/dev/null; then
+  alias aupdate='sudo apt update'
+  alias aupgrade='sudo apt update && sudo apt upgrade -y'
+  alias ainstall='sudo apt install'
+  alias aremove='sudo apt remove'
+  alias asearch='apt search'
+  alias afix='sudo apt --fix-broken install'
+  aautoremove() {
+    sudo apt autoremove --dry-run
+    _run_confirm sudo apt autoremove
+  }
+else
+  alias aupdate='pkg update'
+  alias aupgrade='pkg upgrade'
+  alias ainstall='pkg install'
+  alias aremove='pkg remove'
+  alias asearch='pkg search'
+fi
 
 # PROCESS & SYSTEM MONITORING
 alias pg='ps aux | grep'

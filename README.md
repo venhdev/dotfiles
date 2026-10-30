@@ -1,18 +1,22 @@
 # Dotfiles
 
-A fast, modular, zero-dependency dotfiles system for Linux and WSL with an interactive TUI installer and dynamic machine-specific configurations.
+A fast, modular, zero-dependency dotfiles system for Linux, macOS, and Windows with interactive installers and dynamic machine-specific configurations.
 
 ## Architecture
 
 ```text
 dotfiles/
-├── core/                        # Always loaded
+├── core/                        # POSIX Shell Core (Linux, macOS, Git Bash)
+│   ├── 00-platform-lib.sh       # OS detection (Linux/Darwin/MSYS/WSL) & shims (clip, open, pkg)
 │   ├── 00-shell-lib.sh          # Utilities (_confirm, _log_cmd, pickers)
-│   ├── 10-base-aliases.sh       # Base aliases (nav, systemctl, safe apt)
+│   ├── 10-base-aliases.sh       # Base aliases (nav, systemctl/brew, safe package manager)
 │   ├── 15-cmdlog-lib.sh         # Confirmed command audit log & rerun (clog, cr)
 │   ├── 20-editor-lib.sh         # Auto-detect or configured EDITOR
 │   ├── 30-config-lib.sh         # Quick config opener (conf)
 │   └── 40-info-lib.sh           # Diagnostics (sysinfo, envinfo)
+├── powershell/                  # Windows Native PowerShell Core
+│   ├── profile.ps1              # Sourced by $PROFILE (Microsoft.PowerShell_profile.ps1)
+│   └── core/                    # Platform shims, base aliases, cmdlog, cr, and conf
 ├── modules/                     # Optional modules
 │   ├── ssh/                     # SSH agent & auto-load key
 │   ├── wsl/                     # Windows WSL integration (clip, winpath, explorer, wcp)
@@ -21,13 +25,15 @@ dotfiles/
 │   └── ai/                      # AI & Agent CLI helpers (Claude, OpenClaw, Skills)
 ├── enabled.d/                   # Symlinks to active modules (git-ignored)
 └── local/                       # Machine-specific config (git-ignored)
-    └── local.env                # Local environment variables (DOTFILES_SSH_INIT, etc.)
+    ├── local.env                # Local environment variables for POSIX
+    └── local.ps1                # Local environment settings for PowerShell
 ```
 
 ## Install / Update
 
-### Interactive TUI Installation
+### Linux, macOS & Git Bash (POSIX)
 
+#### Interactive TUI Installation:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash
 ```
@@ -39,13 +45,23 @@ curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | 
 - `[Enter]`: Confirm and proceed to configuration
 - `[q]` or `[Ctrl+C]`: Cancel installation
 
-The installer will auto-detect sensible defaults (e.g. detecting WSL or scanning `~/.ssh/` for key candidates) and prompt for any dynamic module settings.
+The installer auto-detects sensible defaults (e.g. detecting macOS Zsh vs Linux Bash, WSL, or scanning `~/.ssh/` for key candidates).
 
-### Non-Interactive (Install All Modules)
-
+#### Non-Interactive (Install All Modules):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/venhdev/dotfiles/main/install.sh | bash -s -- --all
 ```
+
+---
+
+### Windows (PowerShell Native)
+
+Open PowerShell (Windows Terminal) and run:
+```powershell
+irm https://raw.githubusercontent.com/venhdev/dotfiles/main/install.ps1 | iex
+```
+
+This configures your PowerShell `$PROFILE` and global `.gitconfig` with native shims (`cmdlog`, `clog`, `cr`, `conf`, `clip`, `pkg`).
 
 If an existing checkout at `~/.config/dotfiles` has local changes that block a fast-forward pull, the installer asks whether to force the update. Choosing `yes` creates a stash, updates the checkout, and prints how to recover changes with:
 

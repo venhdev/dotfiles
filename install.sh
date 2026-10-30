@@ -3,7 +3,16 @@ set -e
 
 REPO="https://github.com/venhdev/dotfiles.git"
 DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
-BASHRC="${DOTFILES_BASHRC:-$HOME/.bashrc}"
+
+# Auto-detect shell RC target (Zsh on macOS/Linux vs standard Bash)
+if [[ -n "${DOTFILES_BASHRC:-}" ]]; then
+  RC_FILE="$DOTFILES_BASHRC"
+elif [[ "${SHELL:-}" == *"zsh"* ]] || [[ "$(uname -s 2>/dev/null)" == "Darwin" && -f "$HOME/.zshrc" ]]; then
+  RC_FILE="${ZDOTDIR:-$HOME}/.zshrc"
+else
+  RC_FILE="$HOME/.bashrc"
+fi
+BASHRC="$RC_FILE"
 MARKER="# Load dotfiles"
 
 # Parse CLI arguments
@@ -652,14 +661,15 @@ rm -f "$DIR/enabled.d"/50-*.sh
 (( selected[4] )) && ln -sfn "../modules/docker/module.sh" "$DIR/enabled.d/50-docker.sh"
 (( selected[5] )) && ln -sfn "../modules/ai/module.sh" "$DIR/enabled.d/50-ai.sh"
 
-# 5. Update ~/.bashrc
-touch "$BASHRC"
+# 5. Update shell configuration ($RC_FILE)
+touch "$RC_FILE"
 
-if grep -Fq "$MARKER" "$BASHRC"; then
-  sed -i '/^# Load dotfiles$/,/^unset _\(cfg\|f\) DOTFILES$/d' "$BASHRC"
+if grep -Fq "$MARKER" "$RC_FILE"; then
+  # Cross-platform in-place deletion compatible with both GNU sed and BSD sed
+  sed '/^# Load dotfiles$/,/^unset _\(cfg\|f\) DOTFILES$/d' "$RC_FILE" > "$RC_FILE.tmp" && mv "$RC_FILE.tmp" "$RC_FILE"
 fi
 
-cat >>"$BASHRC" <<'EOF'
+cat >>"$RC_FILE" <<'EOF'
 
 # Load dotfiles
 DOTFILES="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"

@@ -5,11 +5,14 @@ conf() {
 
   local -A m=(
     [bashrc]="$HOME/.bashrc"
+    [zshrc]="${ZDOTDIR:-$HOME}/.zshrc"
+    [platform]="$dotfiles/core/00-platform-lib.sh"
     [ali]="$dotfiles/core/10-base-aliases.sh"
     [localenv]="$dotfiles/local/local.env"
     [ssh]="$HOME/.ssh/config"
     [env]="$HOME/.env"
     [profile]="/etc/profile"
+    [pwprofile]="$dotfiles/powershell/profile.ps1"
     [git]="$HOME/.gitconfig"
     [gitdot]="$dotfiles/.gitconfig"
     [claude]="$HOME/.claude/settings.json"
