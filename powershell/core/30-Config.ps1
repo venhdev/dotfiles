@@ -10,7 +10,11 @@ function conf {
 
     $configMap = [ordered]@{
         "profile"    = $PROFILE
+        "prof"       = $PROFILE
         "pwprofile"  = "$dotfiles\powershell\profile.ps1"
+        "env"        = "$env:USERPROFILE\.env"
+        "localenv"   = "$dotfiles\local\local.ps1"
+        "sysenv"     = "[Windows Environment Variables Dialog]"
         "git"        = "$env:USERPROFILE\.gitconfig"
         "gitdot"     = "$dotfiles\.gitconfig"
         "ssh"        = "$env:USERPROFILE\.ssh\config"
@@ -40,8 +44,24 @@ function conf {
         if ([string]::IsNullOrWhiteSpace($Key)) { return }
     }
 
+    if ($Key -eq "sysenv") {
+        Write-Host "Opening Windows Environment Variables dialog..." -ForegroundColor Green
+        Start-Process "rundll32.exe" -ArgumentList "sysdm.cpl,EditEnvironmentVariables"
+        return
+    }
+
     if ($configMap.Contains($Key)) {
         $target = $configMap[$Key]
+
+        # Auto-create target if file does not exist yet
+        $parentDir = Split-Path -Parent $target
+        if ($parentDir -and -not (Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        }
+        if (-not (Test-Path $target)) {
+            New-Item -ItemType File -Path $target -Force | Out-Null
+        }
+
         $editor = if ($env:EDITOR) {
             $env:EDITOR
         } elseif (Get-Command code -ErrorAction SilentlyContinue) {

@@ -9,13 +9,37 @@ $global:DOTFILES_DIR = if ($env:DOTFILES) {
     Split-Path -Parent $PSScriptRoot
 }
 
-# 1. Load Core PowerShell Components
+# 1. Standardize User Binary Directories in PATH (~/bin, ~/.local/bin)
+$customBinDirs = @(
+    "$env:USERPROFILE\bin",
+    "$env:USERPROFILE\.local\bin"
+)
+foreach ($binDir in $customBinDirs) {
+    if ((Test-Path $binDir) -and ($env:PATH -split ';' -notcontains $binDir)) {
+        $env:PATH = "$binDir;$env:PATH"
+    }
+}
+
+# 2. Load ~/.env environment file if present (key=value pairs)
+$userEnv = "$env:USERPROFILE\.env"
+if (Test-Path $userEnv) {
+    Get-Content $userEnv -ErrorAction SilentlyContinue | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and ($line -match '^\s*([^=]+)=(.*)$')) {
+            $k = $Matches[1].Trim()
+            $v = $Matches[2].Trim().Trim('"', "'")
+            [System.Environment]::SetEnvironmentVariable($k, $v, 'Process')
+        }
+    }
+}
+
+# 3. Load Core PowerShell Components
 $coreScripts = Get-ChildItem -Path "$global:DOTFILES_DIR\powershell\core\*.ps1" -ErrorAction SilentlyContinue | Sort-Object Name
 foreach ($script in $coreScripts) {
     . $script.FullName
 }
 
-# 2. Load Local Machine Configurations if present
+# 4. Load Local Machine Configurations if present
 $localPs1 = "$global:DOTFILES_DIR\local\local.ps1"
 if (Test-Path $localPs1) {
     . $localPs1

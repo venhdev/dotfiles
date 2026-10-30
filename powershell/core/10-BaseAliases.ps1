@@ -15,19 +15,8 @@ Set-Alias -Name cl -Value Clear-Host -ErrorAction SilentlyContinue
 Set-Alias -Name wh -Value where.exe -ErrorAction SilentlyContinue
 Set-Alias -Name which -Value where.exe -ErrorAction SilentlyContinue
 
-# Edit PowerShell Profile
-function ep {
-    $editor = if ($env:EDITOR) {
-        $env:EDITOR
-    } elseif (Get-Command code -ErrorAction SilentlyContinue) {
-        "code"
-    } else {
-        "notepad.exe"
-    }
-    Write-Host "Opening $PROFILE with $editor..." -ForegroundColor Green
-    & $editor $PROFILE
-}
-Set-Alias -Name confprof -Value ep -ErrorAction SilentlyContinue
+# Profile edit shortcut (delegates to canonical 'conf profile')
+function ep { conf profile }
 
 # Inspect Environment Variables across Process, User, and Machine scopes
 function gete {
