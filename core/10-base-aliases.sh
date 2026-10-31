@@ -240,3 +240,17 @@ alias lst1='tree -a -h -L 1'
 
 alias dfh='df -h'
 alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20'
+
+# Package & Tools Notebook Manager
+tools() {
+  local installer="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/scripts/install-tools.sh"
+  if [[ -f "$installer" ]]; then
+    bash "$installer" "$@"
+  else
+    echo "Error: Tools notebook installer not found at $installer" >&2
+    return 1
+  fi
+}
+alias pkg='tools'
+alias lg='lazygit'
+
