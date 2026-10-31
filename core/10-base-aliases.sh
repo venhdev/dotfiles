@@ -1,7 +1,6 @@
 # Base system, navigation, dev, and package management aliases
 
 # ENVIRONMENT & RELOAD
-unalias rel 2>/dev/null || true
 alias rebash='exec bash'
 alias rezsh='exec zsh'
 alias insdf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'

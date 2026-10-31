@@ -234,6 +234,7 @@ EOF
 }
 
 # Shell-aware reload helper (supports both Bash and Zsh)
+unalias rel 2>/dev/null || true
 rel() {
   if [[ -n "${ZSH_VERSION:-}" ]]; then
     local zsh_rc="${ZDOTDIR:-$HOME}/.zshrc"
