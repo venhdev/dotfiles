@@ -209,6 +209,127 @@ _detect_origin() {
   echo "system|$bin_path|system"
 }
 
+# ==============================================================================
+# MANIFEST LEDGER SYNC HELPERS (.installed.json)
+# ==============================================================================
+_get_manifest_path() {
+  local candidates=(
+    "${DOTFILES_DIR:-}/.installed.json"
+    "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.installed.json"
+    "$_DOTFILES_ROOT/.installed.json"
+  )
+  for p in "${candidates[@]}"; do
+    if [[ -f "$p" ]]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  echo "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.installed.json"
+}
+
+_manifest_get_tool_info() {
+  local cmd="$1"
+  local manifest_file
+  manifest_file="$(_get_manifest_path)"
+  [[ -f "$manifest_file" ]] || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+
+  python3 -c '
+import json, sys
+manifest_path, cmd = sys.argv[1:3]
+try:
+    with open(manifest_path, "r") as f:
+        data = json.load(f)
+    t = data.get("tools", {}).get(cmd, {})
+    if t:
+        print(f"{t.get(\"installed_at\", \"-\")}|{t.get(\"updated_at\", \"-\")}")
+except Exception:
+    pass
+' "$manifest_file" "$cmd" 2>/dev/null || true
+}
+
+_manifest_sync_tool() {
+  local cmd="$1"
+  local origin="$2"
+  local pkg="$3"
+  local ver="$4"
+  local bin_path="$5"
+  local repo="$6"
+  local manifest_file
+  manifest_file="$(_get_manifest_path)"
+
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  python3 -c '
+import json, os, sys, datetime
+
+manifest_path, cmd, origin, pkg, ver, bin_path, repo = sys.argv[1:8]
+data = {"version": "1.1.0", "tools": {}}
+if os.path.exists(manifest_path):
+    try:
+        with open(manifest_path, "r") as f:
+            data = json.load(f)
+    except Exception:
+        pass
+
+tools = data.setdefault("tools", {})
+existing = tools.get(cmd, {})
+now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+tools[cmd] = {
+    "origin": origin,
+    "package": pkg or cmd,
+    "installed_version": ver,
+    "binary_path": bin_path,
+    "upstream_repo": repo or existing.get("upstream_repo", ""),
+    "installed_at": existing.get("installed_at", now),
+    "updated_at": now,
+    "last_checked_at": now
+}
+data["version"] = "1.1.0"
+
+manifest_dir = os.path.dirname(manifest_path)
+if manifest_dir and not os.path.exists(manifest_dir):
+    os.makedirs(manifest_dir, exist_ok=True)
+
+tmp_path = manifest_path + ".tmp"
+with open(tmp_path, "w") as f:
+    json.dump(data, f, indent=2)
+os.replace(tmp_path, manifest_path)
+' "$manifest_file" "$cmd" "$origin" "$pkg" "$ver" "$bin_path" "$repo" 2>/dev/null || true
+}
+
+_manifest_remove_tool() {
+  local cmd="$1"
+  local manifest_file
+  manifest_file="$(_get_manifest_path)"
+
+  command -v python3 >/dev/null 2>&1 || return 0
+  [[ -f "$manifest_file" ]] || return 0
+
+  python3 -c '
+import json, os, sys
+
+manifest_path, cmd = sys.argv[1:3]
+if not os.path.exists(manifest_path):
+    sys.exit(0)
+
+try:
+    with open(manifest_path, "r") as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(0)
+
+tools = data.get("tools", {})
+if cmd in tools:
+    del tools[cmd]
+    tmp_path = manifest_path + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp_path, manifest_path)
+' "$manifest_file" "$cmd" 2>/dev/null || true
+}
+
 # Dynamic Ledger In-memory State
 item_count=${#TOOL_NOTEBOOK[@]}
 cmds=()
@@ -270,6 +391,10 @@ _refresh_inventory() {
       statuses+=(1) # Installed
       ver_str="$(_get_tool_version "$cmd")"
       versions+=("${ver_str:--}")
+      # Auto-sync active installed tool into manifest if manifest exists
+      local clean_origin="apt"
+      [[ "$origin_label" == *"github"* ]] && clean_origin="github"
+      _manifest_sync_tool "$cmd" "$clean_origin" "$apt_pkg" "${ver_str:--}" "$path_val" "$gh_repo"
     fi
 
     # Maintain existing selection or default to unselected
@@ -279,7 +404,7 @@ _refresh_inventory() {
   done
 }
 
-# Initial inventory load
+# Initial inventory load & manifest sync
 _refresh_inventory
 
 # Non-interactive CLI Mode Handler
@@ -416,6 +541,9 @@ _install_from_github() {
   install -m 755 "$extracted_bin" "$target_dir/$cmd"
   rm -rf "$tmp_dir"
 
+  # Sync into state manifest ledger
+  _manifest_sync_tool "$cmd" "github" "$cmd" "$ver" "$target_dir/$cmd" "$repo"
+
   printf "${_TUI_GREEN}${_TUI_BOLD}✔ Successfully installed %s v%s to %s/%s${_TUI_RESET}\n" "$cmd" "$ver" "$target_dir" "$cmd" >/dev/tty
 }
 
@@ -454,6 +582,13 @@ _action_install() {
     printf "Packages to install via APT: ${_TUI_GREEN}%s${_TUI_RESET}\n\n" "${apt_queue[*]}"
     if _tui_confirm_prompt "Proceed with 'sudo apt update && sudo apt install'?" "Y"; then
       sudo apt update && sudo apt install -y "${apt_queue[@]}"
+      for idx in "${target_indices[@]}"; do
+        local c="${cmds[idx]}"
+        local pkg="${apt_pkgs[idx]}"
+        if _is_in_apt "$pkg" && command -v "$c" >/dev/null 2>&1; then
+          _manifest_sync_tool "$c" "apt" "$pkg" "$(_get_tool_version "$c")" "$(command -v "$c")" "${gh_repos[idx]}"
+        fi
+      done
     fi
   fi
 
@@ -501,6 +636,13 @@ _action_update() {
   if (( ${#apt_updates[@]} > 0 )); then
     printf "\n==> Updating APT packages: %s...\n" "${apt_updates[*]}"
     sudo apt update && sudo apt --only-upgrade install -y "${apt_updates[@]}"
+    for idx in "${target_indices[@]}"; do
+      local c="${cmds[idx]}"
+      local pkg="${apt_pkgs[idx]}"
+      if command -v "$c" >/dev/null 2>&1; then
+        _manifest_sync_tool "$c" "apt" "$pkg" "$(_get_tool_version "$c")" "$(command -v "$c")" "${gh_repos[idx]}"
+      fi
+    done
   fi
 
   printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
@@ -554,8 +696,10 @@ _action_delete() {
     if [[ "$orig" == *"github"* || "$p" == "$HOME/.local/bin/"* ]]; then
       rm -f "$p"
       printf "${_TUI_GREEN}✔ Removed user binary: %s${_TUI_RESET}\n" "$p"
+      _manifest_remove_tool "$c"
     elif [[ "$orig" == *"apt"* ]]; then
       sudo apt remove -y "$pkg"
+      _manifest_remove_tool "$c"
     else
       printf "${_TUI_YELLOW}Skipping '%s': unable to auto-remove origin '%s'.${_TUI_RESET}\n" "$c" "$orig"
     fi
@@ -594,6 +738,15 @@ _render_live_detail() {
   local gh_info="None (Native APT)"
   [[ -n "${gh_repos[idx]}" ]] && gh_info="https://github.com/${gh_repos[idx]}"
 
+  local inst_date="-"
+  if (( statuses[idx] == 1 )); then
+    local minfo
+    minfo="$(_manifest_get_tool_info "$c" || true)"
+    if [[ -n "$minfo" ]]; then
+      inst_date="${minfo%%|*}"
+    fi
+  fi
+
   local width=78
   local inner_width=$((width - 4))
 
@@ -611,6 +764,7 @@ _render_live_detail() {
     "Available Version : ${apt_cand:-None}"
     "Managed Origin    : $o"
     "Binary Location   : $p"
+    "Installed Date    : $inst_date"
     "APT Repository    : $apt_info"
     "GitHub Upstream   : $gh_info"
     "Official Homepage : $h"

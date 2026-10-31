@@ -820,15 +820,21 @@ write_manifest() {
     terminal_configs_json="[ $(IFS=,; echo "${MANIFEST_TERMINAL_CONFIGS[*]}") ]"
   fi
 
+  local tools_json="{}"
+  if [[ -f "$manifest_file" ]] && command -v python3 >/dev/null 2>&1; then
+    tools_json="$(python3 -c 'import json, sys; print(json.dumps(json.load(open(sys.argv[1])).get("tools", {})))' "$manifest_file" 2>/dev/null || echo "{}")"
+  fi
+
   cat > "$manifest_file.tmp" <<JSON_EOF
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "installed_at": "$now",
   "platform": "$_OS_TYPE",
   "shell_hooks": $shell_hooks_json,
   "symlinks": $symlinks_json,
   "git_includes": $git_includes_json,
-  "terminal_configs": $terminal_configs_json
+  "terminal_configs": $terminal_configs_json,
+  "tools": $tools_json
 }
 JSON_EOF
   mv "$manifest_file.tmp" "$manifest_file"

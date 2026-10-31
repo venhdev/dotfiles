@@ -69,6 +69,18 @@ for rc in data.get("shell_hooks", []):
 for git_inc in data.get("git_includes", []):
     os.system(f"git config --global --unset-all include.path \"{git_inc}\" 2>/dev/null")
     print(f"✔ Unset git include: {git_inc}")
+
+# 4. Clean user-installed tools in ~/.local/bin tracked in manifest
+local_bin_prefix = os.path.expanduser("~/.local/bin/")
+for tool_name, tool_data in data.get("tools", {}).items():
+    if tool_data.get("origin") == "github" or tool_data.get("binary_path", "").startswith(local_bin_prefix):
+        bin_path = tool_data.get("binary_path")
+        if bin_path and os.path.exists(bin_path):
+            try:
+                os.remove(bin_path)
+                print(f"✔ Removed managed tool binary: {bin_path}")
+            except Exception:
+                pass
 ' "$MANIFEST"
   fi
 fi
