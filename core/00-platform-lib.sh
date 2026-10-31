@@ -477,7 +477,11 @@ _zen_cmd_sync() {
     echo "✔ Reloaded $mod_count active modules (enabled.d)"
   fi
 
-  # 5. Reload alias catalog library if present
+  # 5. Reload platform library and alias catalog
+  if [[ -f "$dotfiles_root/core/00-platform-lib.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$dotfiles_root/core/00-platform-lib.sh"
+  fi
   if [[ -f "$dotfiles_root/core/12-alias-catalog-lib.sh" ]]; then
     # shellcheck source=/dev/null
     . "$dotfiles_root/core/12-alias-catalog-lib.sh"
