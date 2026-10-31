@@ -124,7 +124,7 @@ function wslcompact {
 
     $after = (Get-Item -LiteralPath $Path).Length / 1GB
     $saved = $before - $after
-    Write-Host @"
+    $summary = @"
 
 ============================================================
 ✓ VHDX Compaction Complete
@@ -133,5 +133,6 @@ function wslcompact {
   After:  {1:N2} GB
   Saved:  {2:N2} GB
 ============================================================
-"@ -f $before, $after, $saved -ForegroundColor Green
+"@ -f $before, $after, $saved
+    Write-Host $summary -ForegroundColor Green
 }
