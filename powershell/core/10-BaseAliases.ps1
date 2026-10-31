@@ -283,7 +283,7 @@ function killport {
         Write-Host "No process ID associated with port $Port."
         return
     }
-    Write-Host "Terminating process(es) on port $Port: $($pids -join ', ')..."
+    Write-Host "Terminating process(es) on port ${Port}: $($pids -join ', ')..."
     foreach ($pidToKill in $pids) {
         try {
             Stop-Process -Id $pidToKill -Force:$Force -ErrorAction Stop
