@@ -285,6 +285,29 @@ zen() {
       fi
       ;;
 
+    sleep)
+      shift
+      if declare -F sleepin >/dev/null 2>&1; then
+        sleepin "$@"
+      else
+        local minutes="${1:-30}"
+        if ! [[ "$minutes" =~ ^[0-9]+$ ]] || (( minutes < 0 )); then
+          echo "Usage: zen sleep [minutes] (default: 30)" >&2
+          return 1
+        fi
+        echo "Computer will sleep in $minutes minute(s). Press Ctrl+C to cancel."
+        local psh="${DOTFILES_WIN_PATH:-$_WIN_DIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
+        if [[ -x "$psh" ]]; then
+          "$psh" -NoProfile -Command "Start-Sleep -Seconds ($minutes * 60); Add-Type -Namespace Win32 -Name Power -MemberDefinition '[DllImport(\"PowrProf.dll\", SetLastError = true)] public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);'; [Win32.Power]::SetSuspendState(\$false, \$false, \$false) | Out-Null"
+        elif command -v powershell.exe >/dev/null 2>&1; then
+          powershell.exe -NoProfile -Command "Start-Sleep -Seconds ($minutes * 60); Add-Type -Namespace Win32 -Name Power -MemberDefinition '[DllImport(\"PowrProf.dll\", SetLastError = true)] public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);'; [Win32.Power]::SetSuspendState(\$false, \$false, \$false) | Out-Null"
+        else
+          echo "Error: Windows PowerShell not found to initiate system sleep." >&2
+          return 1
+        fi
+      fi
+      ;;
+
     --all|-a)
       local installer="$dotfiles_root/scripts/install-tools.sh"
       if [[ -f "$installer" ]]; then
@@ -609,6 +632,7 @@ Ecosystem & Workstation:
   zen ali [list|query]     Directory & search for all dotfiles shortcuts and aliases
   zen setup [modules...]   Run dotfiles modular configuration and setup (replaces insdf)
   zen sync                 Pull latest git commits and reload newest aliases
+  zen sleep [minutes]      Put Windows machine to sleep after countdown (default: 30)
 
 Active system manager: ${mgr:-none}
 EOF

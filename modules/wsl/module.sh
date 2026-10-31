@@ -69,3 +69,33 @@ wcp() {
   echo "$src → $dst"
   _run_confirm cp "$src" "$dst"
 }
+
+# Sleep Windows host after X minutes from WSL
+unalias sleepin 2>/dev/null || true
+unalias winsleep 2>/dev/null || true
+sleepin() {
+  local minutes="${1:-30}"
+  if ! [[ "$minutes" =~ ^[0-9]+$ ]] || (( minutes < 0 )); then
+    echo "Usage: sleepin [minutes] (default: 30)" >&2
+    return 1
+  fi
+
+  local dotfiles_root
+  if declare -F _get_dotfiles_root >/dev/null 2>&1; then
+    dotfiles_root="$(_get_dotfiles_root)"
+  else
+    dotfiles_root="${ZEN:-${XDG_CONFIG_HOME:-$HOME/.config}/zen}"
+    [[ -d "$dotfiles_root" ]] || dotfiles_root="$HOME/.config/zen"
+  fi
+
+  local ps_script="$dotfiles_root/scripts/sleep.ps1"
+  if [[ -f "$ps_script" ]] && command -v wslpath >/dev/null 2>&1; then
+    local win_path
+    win_path="$(wslpath -w "$ps_script")"
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$win_path" -Minutes "$minutes"
+  else
+    echo "Computer will sleep in $minutes minute(s). Press Ctrl+C to cancel."
+    powershell -NoProfile -Command "Start-Sleep -Seconds ($minutes * 60); Add-Type -Namespace Win32 -Name Power -MemberDefinition '[DllImport(\"PowrProf.dll\", SetLastError = true)] public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);'; [Win32.Power]::SetSuspendState(\$false, \$false, \$false) | Out-Null"
+  fi
+}
+alias winsleep='sleepin' # Put Windows computer to sleep after X minutes

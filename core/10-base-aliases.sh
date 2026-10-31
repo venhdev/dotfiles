@@ -251,3 +251,9 @@ alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20' # Top 20 
 
 alias lg='lazygit'                                                   # Launch lazygit terminal UI
 
+# WINDOWS POWER & SLEEP MANAGEMENT
+if is_wsl || is_windows; then
+  alias winsleep='zen sleep'                                         # Put Windows machine to sleep after countdown (default: 30m)
+  alias sleepin='zen sleep'                                          # Put Windows machine to sleep after countdown (default: 30m)
+fi
+

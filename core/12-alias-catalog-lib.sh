@@ -100,6 +100,7 @@ _zen_alias_catalog() {
     add_cat("AI & AGENT CLI HELPERS");
     add_cat("MOBILE DEVELOPMENT HELPERS");
     add_cat("WINDOWS & WSL HELPERS");
+    add_cat("WINDOWS POWER & SLEEP MANAGEMENT");
     add_cat("SSH & AGENT MANAGEMENT");
     add_cat("GIT SHORTCUTS & ALIASES");
     add_cat("OS & SHELL ENVIRONMENT");
@@ -214,6 +215,9 @@ _zen_alias_catalog() {
     utils[++n_u] = "zen sync" SEP "git pull & alias reload" SEP "Pull latest commits & refresh shell aliases";
     utils[++n_u] = "zen ali" SEP "alias catalog" SEP "Browse and search all shell & git shortcuts";
     utils[++n_u] = "zen setup" SEP "modular installer" SEP "Run dotfiles installation & setup wizard";
+    utils[++n_u] = "zen sleep" SEP "sleepin [min]" SEP "Put Windows machine to sleep after countdown (default: 30)";
+    utils[++n_u] = "sleepin" SEP "zen sleep [min]" SEP "Put Windows machine to sleep after countdown (default: 30)";
+    utils[++n_u] = "winsleep" SEP "sleepin [min]" SEP "Put Windows machine to sleep after countdown (default: 30)";
 
     for (u = 1; u <= n_u; u++) {
       u_row = utils[u];
