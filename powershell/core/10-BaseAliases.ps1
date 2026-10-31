@@ -236,3 +236,36 @@ function ts { [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
 
 # Public IP Check
 function curlip { (Invoke-RestMethod -Uri "https://ifconfig.me" -TimeoutSec 5).Trim() }
+
+# Dotfiles Installer & Module Helpers (Cross-Platform parity with POSIX)
+function insdf {
+    [CmdletBinding()]
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Modules
+    )
+
+    $installerPs1 = "$global:DOTFILES_DIR\install.ps1"
+    if (-not (Test-Path $installerPs1)) {
+        $installerPs1 = "$env:USERPROFILE\.config\dotfiles\install.ps1"
+    }
+
+    if ($Modules.Count -eq 0 -and (Test-Path $installerPs1)) {
+        & $installerPs1
+    } elseif (Get-Command bash.exe -ErrorAction SilentlyContinue) {
+        $installerSh = "$global:DOTFILES_DIR/install.sh" -replace '\\', '/'
+        bash.exe $installerSh @Modules
+    } elseif (Test-Path $installerPs1) {
+        & $installerPs1
+    } else {
+        Write-Error "Dotfiles installer not found at $global:DOTFILES_DIR"
+    }
+}
+
+function instools  { insdf tools }
+function insssh    { insdf ssh }
+function inswsl    { insdf wsl }
+function insmobile { insdf mobile }
+function insdocker { insdf docker }
+function insai     { insdf ai }
+function insgit    { insdf gitconfig }

@@ -63,6 +63,24 @@ rel
 
 ---
 
+### 🚀 Installer & Maintenance Shortcuts
+
+`🏷️ [Cross-Platform]` **`insdf [modules...]`**
+Re-runs the dotfiles installer to update the repository, configure shell profile hooks, or install extensions:
+- **On POSIX (Bash/Zsh)**: Executes `install.sh [modules...]`
+- **On Windows (PowerShell)**: Executes `install.ps1` (or delegates to `install.sh` when specific modules are passed and `bash.exe` is present)
+
+Convenient module shortcuts:
+- `instools` → Install common CLI tools (git, curl, jq, rg)
+- `insssh` → Configure SSH agent and keys
+- `inswsl` → Configure WSL interop tools
+- `insmobile` → Configure Flutter, Shorebird, and Android ADB
+- `insdocker` → Configure Docker shortcuts
+- `insai` → Configure AI agent CLI helpers
+- `insgit` → Configure global Git aliases (`include.path`)
+
+---
+
 ## 2. Navigation & History Search
 
 ### 🔍 Command History Search: `h`
