@@ -25,13 +25,17 @@ function dirsize {
     }
 
     $targetDir = try {
-        (Resolve-Path -Path $targetPath -ErrorAction Stop).Path
+        if (Test-Path -LiteralPath $targetPath) {
+            (Resolve-Path -LiteralPath $targetPath -ErrorAction Stop).Path
+        } else {
+            (Resolve-Path -Path $targetPath -ErrorAction Stop).Path
+        }
     } catch {
         Write-Error "Directory not found: $targetPath"
         return
     }
 
-    $subDirs = @(Get-ChildItem -Path $targetDir -Directory -Force -ErrorAction SilentlyContinue)
+    $subDirs = @(Get-ChildItem -LiteralPath $targetDir -Directory -Force -ErrorAction SilentlyContinue)
     if ($subDirs.Count -eq 0) {
         Write-Host "No subdirectories found in '$targetDir'." -ForegroundColor Yellow
         return
@@ -39,7 +43,8 @@ function dirsize {
 
     $results = if ($PSVersionTable.PSVersion.Major -ge 7) {
         $subDirs | ForEach-Object -Parallel {
-            $raw = robocopy $_.FullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
+            $dirPath = $_.FullName.TrimEnd('\')
+            $raw = robocopy $dirPath NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
             $bytes = 0L
             if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
                 $bytes = [int64]$Matches[1]
@@ -61,7 +66,8 @@ function dirsize {
         } -ThrottleLimit 8
     } else {
         foreach ($d in $subDirs) {
-            $raw = robocopy $d.FullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
+            $dirPath = $d.FullName.TrimEnd('\')
+            $raw = robocopy $dirPath NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
             $bytes = 0L
             if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
                 $bytes = [int64]$Matches[1]

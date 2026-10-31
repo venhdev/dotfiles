@@ -5,16 +5,27 @@ $global:IsWindowsHost = ($PSEdition -eq 'Desktop') -or [bool]$IsWindows
 
 # Clipboard Helper
 function clip {
+    [CmdletBinding()]
     param(
         [Parameter(ValueFromPipeline = $true)]
-        [string]$InputObject
+        [psobject]$InputObject
     )
-    if ($InputObject) {
-        Set-Clipboard -Value $InputObject
-    } elseif ($args) {
-        Set-Clipboard -Value ($args -join ' ')
-    } else {
-        Get-Clipboard
+    begin {
+        $piped = [System.Collections.Generic.List[string]]::new()
+    }
+    process {
+        if ($null -ne $InputObject) {
+            $piped.Add([string]$InputObject)
+        }
+    }
+    end {
+        if ($piped.Count -gt 0) {
+            Set-Clipboard -Value ($piped -join [Environment]::NewLine)
+        } elseif ($args) {
+            Set-Clipboard -Value ($args -join ' ')
+        } else {
+            Get-Clipboard
+        }
     }
 }
 

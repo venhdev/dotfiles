@@ -151,8 +151,9 @@ function conf {
         return
     }
 
-    if ($configMap.Contains($Key)) {
-        $target = $configMap[$Key]
+    $foundKey = $configMap.Keys | Where-Object { $_ -eq $Key } | Select-Object -First 1
+    if ($foundKey) {
+        $target = $configMap[$foundKey]
 
         # Auto-create target if file does not exist yet
         $parentDir = Split-Path -Parent $target

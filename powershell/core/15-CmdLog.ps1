@@ -199,8 +199,9 @@ function _cmdlog_run {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $rc = 0
     try {
+        $global:LASTEXITCODE = 0
         Invoke-Expression $chosenCmd
-        $rc = if ($LASTEXITCODE -ne $null) { $LASTEXITCODE } else { 0 }
+        $rc = if (-not $?) { 1 } elseif ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { $LASTEXITCODE } else { 0 }
     } catch {
         Write-Error $_
         $rc = 1
