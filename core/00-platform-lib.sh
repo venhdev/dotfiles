@@ -409,13 +409,81 @@ _zen_cmd_search() {
 
 _zen_cmd_sync() {
   local dotfiles_root="$(_get_dotfiles_root)"
-  echo "==> Synchronizing dotfiles repository ($dotfiles_root)..."
-  if [[ -d "$dotfiles_root/.git" ]]; then
-    git -C "$dotfiles_root" pull --rebase || {
-      echo "Warning: git pull failed; proceeding with setup." >&2
-    }
+
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    echo "Usage: zen sync [OPTIONS]"
+    echo
+    echo "Pull latest commits from remote and reload aliases without running setup."
+    echo
+    echo "Options:"
+    echo "  -h, --help    Show this help message"
+    echo
+    echo "Note: To reconfigure system modules or run full provisioning, use 'zen setup'."
+    return 0
   fi
-  bash "$dotfiles_root/install.sh" "$@"
+
+  echo "==> Synchronizing Zen repository ($dotfiles_root)..."
+  if [[ -d "$dotfiles_root/.git" ]]; then
+    echo "--> Pulling latest commits from remote..."
+    if git -C "$dotfiles_root" pull --rebase --autostash; then
+      local latest_commit
+      latest_commit="$(git -C "$dotfiles_root" log -1 --format='%h ("%s")' 2>/dev/null || true)"
+      [[ -n "$latest_commit" ]] && echo "✔ Repository updated: $latest_commit"
+    else
+      echo "⚠️  Warning: git pull failed; check network or repository status." >&2
+    fi
+  else
+    echo "Notice: '$dotfiles_root' is not a git repository; skipping git pull."
+  fi
+
+  echo "--> Synchronizing latest aliases..."
+
+  # 1. Ensure global git aliases are included
+  if command -v git >/dev/null 2>&1 && [[ -f "$dotfiles_root/.gitconfig" ]]; then
+    if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$dotfiles_root/.gitconfig"; then
+      git config --global --add include.path "$dotfiles_root/.gitconfig"
+    fi
+    echo "✔ Global Git aliases synced ($dotfiles_root/.gitconfig)"
+  fi
+
+  # 2. Source local env if present
+  if [[ -r "$dotfiles_root/local/local.env" ]]; then
+    # shellcheck source=/dev/null
+    . "$dotfiles_root/local/local.env"
+  fi
+
+  # 3. Reload shell core aliases
+  shopt -s expand_aliases 2>/dev/null || true
+  local alias_count=0
+  if [[ -f "$dotfiles_root/core/10-base-aliases.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$dotfiles_root/core/10-base-aliases.sh"
+    alias_count=$(grep -cE '^[[:space:]]*alias ' "$dotfiles_root/core/10-base-aliases.sh" 2>/dev/null || echo 0)
+    echo "✔ Reloaded $alias_count shell aliases (core/10-base-aliases.sh)"
+  fi
+
+  # 4. Reload enabled modules
+  local mod_count=0
+  if [[ -d "$dotfiles_root/enabled.d" ]]; then
+    for _mod in "$dotfiles_root"/enabled.d/*.sh; do
+      if [[ -r "$_mod" ]]; then
+        # shellcheck source=/dev/null
+        . "$_mod"
+        ((mod_count++))
+      fi
+    done
+  fi
+  if (( mod_count > 0 )); then
+    echo "✔ Reloaded $mod_count active modules (enabled.d)"
+  fi
+
+  # 5. Reload alias catalog library if present
+  if [[ -f "$dotfiles_root/core/12-alias-catalog-lib.sh" ]]; then
+    # shellcheck source=/dev/null
+    . "$dotfiles_root/core/12-alias-catalog-lib.sh"
+  fi
+
+  echo "✔ All latest aliases are now active in current session."
 }
 
 _zen_package_action() {
@@ -535,8 +603,8 @@ Headless Package Management:
 Ecosystem & Workstation:
   zen doctor               Audit ecosystem health (OS, symlinks, git, hooks, tools)
   zen ali [list|query]     Directory & search for all dotfiles shortcuts and aliases
-  zen setup [modules...]   Run dotfiles modular configuration (replaces insdf)
-  zen sync                 Pull dotfiles git updates and re-apply configuration
+  zen setup [modules...]   Run dotfiles modular configuration and setup (replaces insdf)
+  zen sync                 Pull latest git commits and reload newest aliases
 
 Active system manager: ${mgr:-none}
 EOF
