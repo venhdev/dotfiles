@@ -30,11 +30,31 @@ _tui_is_interactive() {
 
 # Enter TUI Raw Mode
 _tui_enter() {
-  _TUI_ORIG_STTY="$(stty -g < /dev/tty 2>/dev/null || true)"
+  if [[ -z "${_TUI_ORIG_STTY:-}" ]]; then
+    _TUI_ORIG_STTY="$(stty -g < /dev/tty 2>/dev/null || true)"
+  fi
   stty -echo -icanon min 1 time 0 < /dev/tty 2>/dev/null || true
   printf "\033[?25l" >/dev/tty 2>/dev/null || true
   _TUI_IS_ACTIVE=1
-  trap '_tui_exit' EXIT INT TERM
+  trap '_tui_sigint' INT
+  trap '_tui_sigterm' TERM
+  trap '_tui_exit' EXIT
+}
+
+# Signal handler for SIGINT (Ctrl+C)
+_tui_sigint() {
+  _tui_exit
+  printf "\n" >/dev/tty 2>/dev/null || true
+  trap - INT EXIT TERM
+  kill -s INT $$ 2>/dev/null || exit 130
+}
+
+# Signal handler for SIGTERM
+_tui_sigterm() {
+  _tui_exit
+  printf "\n" >/dev/tty 2>/dev/null || true
+  trap - TERM EXIT INT
+  kill -s TERM $$ 2>/dev/null || exit 143
 }
 
 # Exit TUI Raw Mode and Restore Terminal State
@@ -87,7 +107,7 @@ _tui_read_key() {
     eval "$_out_var='DELETE'"
   elif [[ "$key" == "?" || "$key" == "o" || "$key" == "O" ]]; then
     eval "$_out_var='INFO'"
-  elif [[ "$key" == "q" || "$key" == "Q" || "$key" == $'\x03' ]]; then
+  elif [[ "$key" == "q" || "$key" == "Q" || "$key" == $'\x03' || "$key" == $'\x04' ]]; then
     eval "$_out_var='QUIT'"
   elif [[ "$key" == "" || "$key" == $'\r' || "$key" == $'\n' ]]; then
     eval "$_out_var='ENTER'"
