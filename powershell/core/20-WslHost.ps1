@@ -7,7 +7,7 @@ function wslcompact {
         [string]$Path
     )
 
-    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole('Administrator')
+    $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $admin) {
         Write-Warning 'Administrator privileges required. Please reopen PowerShell as Administrator.'
         return
