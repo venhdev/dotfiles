@@ -327,7 +327,7 @@ if ! _tui_is_interactive; then
 fi
 
 # ==============================================================================
-# ACTION HANDLERS (Install, Update, Delete, Info)
+# ACTION HANDLERS (Install, Update, Delete)
 # ==============================================================================
 
 # Download and Install GitHub Pre-built Binary
@@ -565,8 +565,11 @@ _action_delete() {
   _tui_enter
 }
 
-_action_info() {
-  local idx="$cursor"
+# ==============================================================================
+# LIVE DETAIL PREVIEW PANE (Updates dynamically as cursor scrolls)
+# ==============================================================================
+_render_live_detail() {
+  local idx="$1"
   local c="${cmds[idx]}"
   local d="${descs[idx]}"
   local h="${homepages[idx]}"
@@ -576,29 +579,49 @@ _action_info() {
   local o="${origins[idx]}"
   [[ "$o" == "NONE" ]] && o="-"
   local p="${paths[idx]}"
+  [[ "$p" == "-" ]] && p="None"
 
   local apt_cand
   apt_cand="$(_get_apt_candidate "${apt_pkgs[idx]}" || true)"
-  local apt_info="Not available in current APT repositories"
+  local apt_info="Not in current APT repositories"
   if [[ -n "$apt_cand" ]]; then
     apt_info="Available in APT (${apt_pkgs[idx]} v$apt_cand)"
   elif _is_in_apt "${apt_pkgs[idx]}"; then
     apt_info="Available in APT (${apt_pkgs[idx]})"
   fi
 
+  local gh_info="None (Native APT)"
+  [[ -n "${gh_repos[idx]}" ]] && gh_info="https://github.com/${gh_repos[idx]}"
+
+  local width=78
+  local inner_width=$((width - 4))
+
+  printf "\n" >/dev/tty
+  local title_part="┌─[ DETAIL: $c ]"
+  local pad_len=$((width - ${#title_part} - 1))
+  local top_dashes=""
+  for ((d_idx=0; d_idx<pad_len; d_idx++)); do top_dashes="${top_dashes}─"; done
+  printf "${_TUI_CYAN}${_TUI_BOLD}%s%s┐${_TUI_RESET}\n" "$title_part" "$top_dashes" >/dev/tty
+
   local lines=(
-    "Command Name       : $c"
-    "Description        : $d"
-    "Status             : $s"
-    "Installed Version  : $v"
-    "Managed Origin     : $o"
-    "Binary Location    : $p"
-    "APT Repository     : $apt_info"
-    "GitHub Upstream    : ${gh_repos[idx]:-None (Native APT)}"
-    "Official Homepage  : $h"
+    "Description       : $d"
+    "Status            : $s"
+    "Installed Version : $v"
+    "Available Version : ${apt_cand:-None}"
+    "Managed Origin    : $o"
+    "Binary Location   : $p"
+    "APT Repository    : $apt_info"
+    "GitHub Upstream   : $gh_info"
+    "Official Homepage : $h"
   )
 
-  _tui_modal_box "TOOL DOSSIER: $c" lines
+  for line in "${lines[@]}"; do
+    printf "${_TUI_CYAN}│${_TUI_RESET} %-*.*s ${_TUI_CYAN}│${_TUI_RESET}\n" "$inner_width" "$inner_width" "$line" >/dev/tty
+  done
+
+  local div_dashes=""
+  for ((d_idx=0; d_idx<width-2; d_idx++)); do div_dashes="${div_dashes}─"; done
+  printf "${_TUI_CYAN}└%s┘${_TUI_RESET}\n" "$div_dashes" >/dev/tty
 }
 
 # ==============================================================================
@@ -639,7 +662,10 @@ while true; do
       "$prefix" "$mark" "${cmds[i]}" "$status_disp" "$ver_disp" "$orig_disp" "${descs[i]}" >/dev/tty
   done
 
-  _tui_draw_footer "[↑/↓, k/j] Navigate  [Space] Toggle  [a] Toggle All  [i/Enter] Install  [u] Update  [d] Remove  [?] Info  [q/Esc] Quit"
+  # Render Live Master-Detail Preview Pane for Currently Focused Tool
+  _render_live_detail "$cursor"
+
+  _tui_draw_footer "[↑/↓, k/j] Navigate  [Space] Toggle  [a] Toggle All  [i/Enter] Install  [u] Update  [d] Remove  [q/Esc] Quit"
 
   action=""
   _tui_read_key action
@@ -676,7 +702,7 @@ while true; do
       _refresh_inventory
       ;;
     INFO)
-      _action_info
+      # In live-detail mode, info key is a convenient no-op or refresh
       ;;
     QUIT|ESC)
       break
