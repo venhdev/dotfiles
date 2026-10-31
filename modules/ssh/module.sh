@@ -1,6 +1,11 @@
-# SSH helpers
+# SSH helpers and agent management
 
 SSH_INIT="${DOTFILES_SSH_INIT:-}"
+
+# Ensure socket directory exists for OpenSSH multiplexing (%C hash avoids macOS 104-byte socket path limit)
+if [[ -d "$HOME/.ssh" && ! -d "$HOME/.ssh/sockets" ]]; then
+  mkdir -p "$HOME/.ssh/sockets" 2>/dev/null && chmod 700 "$HOME/.ssh/sockets" 2>/dev/null || true
+fi
 
 ssha() {
   [[ -z $SSH_AUTH_SOCK ]] && eval "$(ssh-agent -s)" >/dev/null

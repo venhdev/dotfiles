@@ -4,6 +4,93 @@
 function .. { Set-Location .. }
 function ... { Set-Location ../.. }
 
+# Safe Environment PATH Modification (Cross-Platform)
+function Add-Path {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Path,
+        [Parameter(Position = 1)]
+        [ValidateSet("Prepend", "Append")]
+        [string]$Position = "Prepend"
+    )
+    $cleanPath = $Path.TrimEnd('\', '/')
+    if (-not (Test-Path -LiteralPath $cleanPath)) { return }
+
+    $paths = @($env:PATH -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_.TrimEnd('\', '/') -ne $cleanPath })
+    if ($Position -eq "Append") {
+        $env:PATH = ($paths + $cleanPath) -join ';'
+    } else {
+        $env:PATH = (@($cleanPath) + $paths) -join ';'
+    }
+}
+Set-Alias -Name pathadd -Value Add-Path -ErrorAction SilentlyContinue
+
+# Deep Navigation & Directory Creation
+function mkcd {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromRemainingArguments = $true)]
+        [string[]]$Path
+    )
+    $target = $Path[-1]
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    Set-Location -LiteralPath $target
+}
+
+# Ensure Parent Directories and Touch Files
+function mktouch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromRemainingArguments = $true)]
+        [string[]]$Paths
+    )
+    foreach ($p in $Paths) {
+        $parent = Split-Path -Parent $p
+        if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        if (-not (Test-Path -LiteralPath $p)) {
+            New-Item -ItemType File -Path $p -Force | Out-Null
+        } else {
+            (Get-Item -LiteralPath $p).LastWriteTime = [DateTime]::UtcNow
+        }
+    }
+}
+
+# Universal Archive Extractor
+function extract {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromRemainingArguments = $true)]
+        [string[]]$Files
+    )
+    foreach ($f in $Files) {
+        if (-not (Test-Path -LiteralPath $f)) {
+            Write-Warning "extract: '$f' does not exist."
+            continue
+        }
+        $ext = [System.IO.Path]::GetExtension($f).ToLowerInvariant()
+        $fullPath = (Resolve-Path -LiteralPath $f).Path
+        $destDir = Split-Path -Parent $fullPath
+        switch ($ext) {
+            ".zip" {
+                Expand-Archive -LiteralPath $fullPath -DestinationPath $destDir -Force
+            }
+            { $_ -in ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz", ".tar" } {
+                if (Get-Command tar.exe -ErrorAction SilentlyContinue) {
+                    tar.exe -xf $fullPath -C $destDir
+                } else {
+                    Write-Warning "extract: tar.exe required for $ext archive extraction."
+                }
+            }
+            default {
+                Write-Warning "extract: unsupported archive extension '$ext'."
+            }
+        }
+    }
+}
+
 # File Listing
 function ll { Get-ChildItem -Path (Get-Item -Path $PWD) }
 function la { Get-ChildItem -Path (Get-Item -Path $PWD) -Force }
@@ -271,6 +358,36 @@ function ts { [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
 
 # Public IP Check
 function curlip { (Invoke-RestMethod -Uri "https://ifconfig.me" -TimeoutSec 5).Trim() }
+
+# Graceful Port Termination (Cross-Platform)
+function killport {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [int]$Port,
+        [Parameter(Position = 1)]
+        [switch]$Force
+    )
+    $connections = @(Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue)
+    if ($connections.Count -eq 0) {
+        Write-Host "No listening process found on port $Port."
+        return
+    }
+    $pids = $connections | Select-Object -ExpandProperty OwningProcess -Unique | Where-Object { $_ -gt 0 }
+    if ($pids.Count -eq 0) {
+        Write-Host "No process ID associated with port $Port."
+        return
+    }
+    Write-Host "Terminating process(es) on port $Port: $($pids -join ', ')..."
+    foreach ($pidToKill in $pids) {
+        try {
+            Stop-Process -Id $pidToKill -Force:$Force -ErrorAction Stop
+        } catch {
+            Write-Warning "Failed to stop PID $pidToKill : $_"
+        }
+    }
+    Write-Host "✓ Port $Port released." -ForegroundColor Green
+}
 
 # Dotfiles Installer & Module Helpers (Cross-Platform parity with POSIX)
 function insdf {

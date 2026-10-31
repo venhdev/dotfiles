@@ -15,8 +15,10 @@ $customBinDirs = @(
     "$env:USERPROFILE\.local\bin"
 )
 foreach ($binDir in $customBinDirs) {
-    if ((Test-Path $binDir) -and ($env:PATH -split ';' -notcontains $binDir)) {
-        $env:PATH = "$binDir;$env:PATH"
+    if (Test-Path $binDir) {
+        $cleanDir = $binDir.TrimEnd('\', '/')
+        $currentPaths = @($env:PATH -split ';' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and $_.TrimEnd('\', '/') -ne $cleanDir })
+        $env:PATH = (@($cleanDir) + $currentPaths) -join ';'
     }
 }
 

@@ -101,19 +101,28 @@ function _cmdlog_list {
         }
     }
 
-    $filtered = $records | Where-Object {
-        $matchCwd = (-not $cwdOnly) -or ($_.Cwd -eq (Get-Location).Path)
-        $matchQuery = (-not $query) -or ($_.Command -like "*$query*")
-        $matchCwd -and $matchQuery
-    } | Select-Object -First $limit
+    $seen = [System.Collections.Generic.HashSet[string]]::new()
+    $items = [System.Collections.Generic.List[object]]::new()
+    foreach ($entry in $records) {
+        $matchCwd = (-not $cwdOnly) -or ($entry.Cwd -eq (Get-Location).Path)
+        $matchQuery = (-not $query) -or ($entry.Command -like "*$query*")
+        if ($matchCwd -and $matchQuery) {
+            if ($seen.Add($entry.Command)) {
+                $items.Add($entry)
+                if ($items.Count -ge $limit) { break }
+            }
+        }
+    }
 
-    $items = @($filtered)
     if ($items.Count -eq 0) {
         Write-Host "No matching commands found." -ForegroundColor DarkGray
         return
     }
 
-    [Array]::Reverse($items)
+    $maxCols = 80
+    try { $maxCols = $Host.UI.RawUI.WindowSize.Width } catch {}
+    if ($maxCols -le 20) { $maxCols = 80 }
+
     for ($idx = 0; $idx -lt $items.Count; $idx++) {
         $entry = $items[$idx]
         $stColor = switch ($entry.Status) {
@@ -121,13 +130,21 @@ function _cmdlog_list {
             "-" { "DarkGray" }
             default { "Red" }
         }
-        Write-Host (" {0,2}) " -f ($idx + 1)) -NoNewline -ForegroundColor Cyan
+        Write-Host (" [{0}] " -f ($idx + 1)) -NoNewline -ForegroundColor Cyan
         Write-Host "$($entry.Timestamp) " -NoNewline -ForegroundColor DarkGray
         Write-Host ("[{0}] " -f $entry.Status) -NoNewline -ForegroundColor $stColor
         if ($entry.Cwd -ne "-" -and $entry.Cwd) {
-            Write-Host ("[{0}] " -f (Split-Path -Leaf $entry.Cwd)) -NoNewline -ForegroundColor Yellow
+            Write-Host ("[{0}]" -f (Split-Path -Leaf $entry.Cwd)) -NoNewline -ForegroundColor Yellow
         }
-        Write-Host $entry.Command
+        Write-Host ""
+        $dispCmd = $entry.Command
+        if ($dispCmd.Length -gt ($maxCols - 2)) {
+            $dispCmd = $dispCmd.Substring(0, $maxCols - 5) + "..."
+        }
+        Write-Host $dispCmd
+        if ($idx -lt $items.Count - 1) {
+            Write-Host ""
+        }
     }
 }
 
@@ -156,18 +173,30 @@ function _cmdlog_run {
         }
     }
 
-    $filtered = @($records | Where-Object {
-        $matchCwd = (-not $cwdOnly) -or ($_.Cwd -eq (Get-Location).Path)
-        $matchQuery = (-not $query) -or ($_.Command -like "*$query*")
-        $matchCwd -and $matchQuery
-    } | Select-Object -First 10)
+    $seen = [System.Collections.Generic.HashSet[string]]::new()
+    $filtered = [System.Collections.Generic.List[object]]::new()
+    foreach ($rec in $records) {
+        $matchCwd = (-not $cwdOnly) -or ($rec.Cwd -eq (Get-Location).Path)
+        $matchQuery = (-not $query) -or ($rec.Command -like "*$query*")
+        if ($matchCwd -and $matchQuery) {
+            if ($seen.Add($rec.Command)) {
+                $filtered.Add($rec)
+                if ($filtered.Count -ge 10) { break }
+            }
+        }
+    }
 
     if ($filtered.Count -eq 0) {
         Write-Warning "No matching commands found."
         return
     }
 
+    $maxCols = 80
+    try { $maxCols = $Host.UI.RawUI.WindowSize.Width } catch {}
+    if ($maxCols -le 20) { $maxCols = 80 }
+
     $chosenCmd = $null
+    $isInteractive = $false
     if ($targetIdx) {
         if ($targetIdx -ge 1 -and $targetIdx -le $filtered.Count) {
             $chosenCmd = $filtered[$targetIdx - 1].Command
@@ -176,16 +205,48 @@ function _cmdlog_run {
             return
         }
     } else {
+        $isInteractive = $true
         # Check if Out-ConsoleGridView is available
         if (Get-Command Out-ConsoleGridView -ErrorAction SilentlyContinue) {
             $selected = $filtered | Out-ConsoleGridView -Title "Select Command to Rerun" -OutputMode Single
             if ($selected) { $chosenCmd = $selected.Command }
         } else {
             for ($i = 0; $i -lt $filtered.Count; $i++) {
-                Write-Host (" {0,2}) {1}  {2}" -f ($i + 1), $filtered[$i].Timestamp, $filtered[$i].Command)
+                $stColor = switch ($filtered[$i].Status) {
+                    "0" { "Green" }
+                    "-" { "DarkGray" }
+                    default { "Red" }
+                }
+                Write-Host (" [{0}] " -f ($i + 1)) -NoNewline -ForegroundColor Cyan
+                Write-Host "$($filtered[$i].Timestamp) " -NoNewline -ForegroundColor DarkGray
+                Write-Host ("[{0}] " -f $filtered[$i].Status) -NoNewline -ForegroundColor $stColor
+                if ($filtered[$i].Cwd -ne "-" -and $filtered[$i].Cwd) {
+                    Write-Host ("[{0}]" -f (Split-Path -Leaf $filtered[$i].Cwd)) -NoNewline -ForegroundColor Yellow
+                }
+                Write-Host ""
+                $dispCmd = $filtered[$i].Command
+                if ($dispCmd.Length -gt ($maxCols - 2)) {
+                    $dispCmd = $dispCmd.Substring(0, $maxCols - 5) + "..."
+                }
+                Write-Host $dispCmd
+                if ($i -lt $filtered.Count - 1) {
+                    Write-Host ""
+                }
             }
-            $choice = Read-Host "Select [1-$($filtered.Count), default 1, q to cancel]"
+            $choice = Read-Host "Select [1-$($filtered.Count), default 1, c <num> to copy, q to cancel]"
             if ($choice -eq "q" -or $choice -eq "0") { return }
+            if ($choice -match '^(c|clip|copy)\s*(\d*)$') {
+                $cIdx = if ($Matches[2]) { [int]$Matches[2] } else { 1 }
+                if ($cIdx -ge 1 -and $cIdx -le $filtered.Count) {
+                    $cmdToCopy = $filtered[$cIdx - 1].Command
+                    Set-Clipboard -Value $cmdToCopy
+                    Write-Host "✓ Copied to clipboard: $cmdToCopy" -ForegroundColor Green
+                    return
+                } else {
+                    Write-Error "Invalid copy index $cIdx (must be 1-$($filtered.Count))."
+                    return
+                }
+            }
             $pickIdx = if ([string]::IsNullOrWhiteSpace($choice)) { 1 } else { [int]$choice }
             if ($pickIdx -ge 1 -and $pickIdx -le $filtered.Count) {
                 $chosenCmd = $filtered[$pickIdx - 1].Command
@@ -194,6 +255,14 @@ function _cmdlog_run {
     }
 
     if (-not $chosenCmd) { return }
+
+    if ($isInteractive) {
+        $confirm = Read-Host "Execute: $chosenCmd? [Y/n]"
+        if ($confirm -match '^(n|no)$') {
+            Write-Host "Cancelled"
+            return
+        }
+    }
 
     Write-Host "`n▶ $chosenCmd`n" -ForegroundColor Cyan
     $sw = [System.Diagnostics.Stopwatch]::StartNew()

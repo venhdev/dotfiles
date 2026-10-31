@@ -114,6 +114,10 @@ h "git commit" 3
 - `...` → Move up 2 directories (`cd ../..`)
 - `....` → Move up 3 directories (`cd ../../..`)
 - `--` → Return to previous directory (`cd -`) `[POSIX]`
+- `mkcd <dir>` → Create directory structure and immediately enter it (`mkdir -p "$dir" && cd "$dir"`)
+- `mktouch <file...>` → Create file(s) while automatically ensuring parent directories exist
+- `extract <archive...>` → Universal multi-archive extractor (`.tar.gz`, `.zip`, `.tar.bz2`, `.tar.xz`, `.7z`)
+- `pathadd <dir> [prepend|append]` → Safely insert directory into `$PATH` (CWE-426 safe, no duplicates or empty `::` entries)
 - `ll` → Detailed file listing
 - `la` → Detailed file listing including hidden files
 - `cl` → Clear terminal screen
@@ -171,6 +175,16 @@ clog -d 5
 ### ⚡ Smart Command Re-run: `cr`
 
 `🏷️ [Cross-Platform]` **`cr [options] [query|index]`**
+
+#### 🎮 Interactive TUI Controls:
+- **`[↑/↓]` or `[j/k]`**: Navigate command list
+- **`[c]`**: Copy highlighted command directly to system clipboard
+- **`[r]` or `[Enter]`**: Execute command with confirmation prompt (`[Y/n]`)
+- **`[/]`**: Activate instant live search (dynamically filters as you type)
+  - Inside search: `[Enter]` executes highlighted command immediately, `[Tab]` copies to clipboard, `[Esc]` clears search.
+- **`[q]` / `[Esc]`**: Cancel and exit
+- **Deduplication**: Automatically groups repeated runs into single distinct entries, displaying the latest timestamp.
+- **Length Truncation**: Long commands exceeding terminal width are cleanly truncated with `...` on screen while preserving 100% of original parameters when executed or copied.
 
 ```bash
 # 1. Open interactive picker (fzf if available) to select and re-run
@@ -348,6 +362,9 @@ Global Git aliases configured via `include.path` (`~/.config/dotfiles/.gitconfig
 | `git lga` | Complete commit graph across all branches | `git lga` |
 | `git inf` | Summary of current branch, remote tracking, unpushed/unpulled commits | `git inf` |
 | `git swr <branch>` | Switch branch or auto-track remote branch if not present locally | `git swr feature-auth`<br>`git swr origin/feat-login` |
+| `git pf` | Safe force-push requiring lease and remote-state verification (`push --force-with-lease --force-if-includes`) | `git pf` |
+| `git sweep [target]` | Detect and remove merged and squash-merged feature branches against target (default: `main`) | `git sweep`<br>`git sweep develop` |
+| `git gwta` / `git gwtl` / `git gwtd` | Git worktree management shortcuts (add, list, delete) | `git gwta ../wt-feature feat`<br>`git gwtl` |
 | `git unstage [files]` | Remove files from staging area | `git unstage src/index.ts` |
 | `git undo` | Undo last commit while preserving staged changes | `git undo` |
 | `git br` | List branches | `git br -a` |
@@ -380,6 +397,7 @@ envinfo
   portss 3000
   portss 8080
   ```
+- **`killport <port> [signal]`** `🏷️ [Cross-Platform]`: Gracefully terminate process(es) listening on a port with fallback to `SIGKILL` (`9`) if stubborn.
 - **`psmem`** `[POSIX]`: View top 10 processes consuming memory.
 - **`pscpu`** `[POSIX]`: View top 10 processes consuming CPU.
 - **`va`** / **`vd`** `[PowerShell]`: Activate (`va`) or Deactivate (`vd`) Python virtual environments (`.venv`, `venv`, `env`).
@@ -414,7 +432,8 @@ When the `mobile` module is enabled:
 When the `docker` module is enabled:
 - **`dps`**: Formatted active container table (ID, Names, Status, Ports).
 - **`dpsa`**: Formatted table of all containers (including stopped).
-- **`dcl`**: Thorough system cleanup (`docker system prune -a --volumes`).
+- **`dcl`**: Safe system cleanup (`docker system prune -a`) preserving database volumes.
+- **`dcl_hard`**: Thorough cleanup including `--volumes` with interactive confirmation prompt to prevent accidental data loss.
 
 ---
 

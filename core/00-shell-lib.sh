@@ -8,6 +8,133 @@ sudoportss() {
   sudo ss -tulpn | grep "$1" | column -t
 }
 
+# Graceful port termination (SIGTERM -> verify -> SIGKILL) with ss/lsof fallback
+killport() {
+  local port="${1:-}"
+  local signal="${2:-15}"
+  if [[ -z "$port" || ! "$port" =~ ^[0-9]+$ ]]; then
+    echo "Usage: killport <port_number> [signal]" >&2
+    return 1
+  fi
+
+  local pids=""
+  if command -v lsof >/dev/null 2>&1; then
+    pids=$(lsof -t -n -P -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  elif command -v ss >/dev/null 2>&1; then
+    pids=$(ss -lptn "sport = :$port" 2>/dev/null | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u || true)
+  fi
+
+  if [[ -z "$pids" ]]; then
+    echo "No listening process found on port $port."
+    return 0
+  fi
+
+  echo "Terminating process(es) on port $port: $pids (signal: $signal)..."
+  local pid
+  for pid in $pids; do
+    kill -"$signal" "$pid" 2>/dev/null || true
+  done
+
+  # Graceful check: escalate to SIGKILL if still active after brief pause
+  sleep 0.2
+  local remaining=""
+  for pid in $pids; do
+    if kill -0 "$pid" 2>/dev/null; then
+      remaining="${remaining:+$remaining }$pid"
+    fi
+  done
+
+  if [[ -n "$remaining" ]]; then
+    echo "Escalating to SIGKILL (9) for PID(s): $remaining"
+    for pid in $remaining; do
+      kill -9 "$pid" 2>/dev/null || true
+    done
+  fi
+  echo "✓ Port $port released."
+}
+
+# Path management helper (CWE-426 safe, trailing-slash clean, no duplicate or empty entries)
+pathadd() {
+  local dir="${1%/}"
+  local pos="${2:-prepend}"
+  [[ -d "$dir" ]] || return 0
+
+  local new_path="" item clean_item
+  local old_ifs="$IFS"
+  IFS=":"
+  for item in $PATH; do
+    clean_item="${item%/}"
+    if [[ "$clean_item" != "$dir" && -n "$clean_item" ]]; then
+      new_path="${new_path:+$new_path:}$clean_item"
+    fi
+  done
+  IFS="$old_ifs"
+
+  if [[ -z "$new_path" ]]; then
+    PATH="$dir"
+  elif [[ "$pos" == "append" ]]; then
+    PATH="$new_path:$dir"
+  else
+    PATH="$dir:$new_path"
+  fi
+  export PATH
+}
+
+# Create directory tree and navigate into target
+mkcd() {
+  if (($# == 0)); then
+    echo "Usage: mkcd <directory>" >&2
+    return 1
+  fi
+  local target="${!#}"
+  mkdir -p -- "$@" && cd -- "$target"
+}
+
+# Create files and ensure parent directories exist
+mktouch() {
+  if (($# == 0)); then
+    echo "Usage: mktouch <file> [file...]" >&2
+    return 1
+  fi
+  local file parent
+  for file in "$@"; do
+    parent="$(dirname -- "$file")"
+    [[ -d "$parent" ]] || mkdir -p -- "$parent"
+    touch -- "$file"
+  done
+}
+
+# Universal multi-archive extractor
+extract() {
+  if (($# == 0)); then
+    echo "Usage: extract <archive> [archive...]" >&2
+    return 1
+  fi
+  local file
+  for file in "$@"; do
+    if [[ ! -f "$file" ]]; then
+      echo "extract: '$file' is not a valid file" >&2
+      continue
+    fi
+    case "${file,,}" in
+      *.tar.gz|*.tgz)    tar -xzf "$file" ;;
+      *.tar.bz2|*.tbz2)  tar -xjf "$file" ;;
+      *.tar.xz|*.txz)    tar -xJf "$file" ;;
+      *.tar.zst)         tar --zstd -xf "$file" ;;
+      *.tar)             tar -xf "$file" ;;
+      *.zip)             unzip -q "$file" ;;
+      *.rar)             unrar x "$file" ;;
+      *.7z)              7z x "$file" ;;
+      *.gz)              gunzip "$file" ;;
+      *.bz2)             bunzip2 "$file" ;;
+      *.xz)              unxz "$file" ;;
+      *)
+        echo "extract: unsupported archive format: '$file'" >&2
+        ;;
+    esac
+  done
+}
+
 alias lsfunc='showfunc'
 
 showfunc() {
