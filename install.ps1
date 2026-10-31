@@ -16,6 +16,17 @@ Write-Host @"
 ============================================================
 "@ -ForegroundColor Cyan
 
+# Initialize Manifest Ledger
+$manifestData = [ordered]@{
+    version = "1.0.0"
+    installed_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    platform = "windows"
+    shell_hooks = @()
+    symlinks = @()
+    git_includes = @()
+    terminal_configs = @()
+}
+
 # 1. Clone or Update Dotfiles Repository
 if (Test-Path "$TargetDir\.git") {
     Write-Host "Updating existing dotfiles repository at $TargetDir..." -ForegroundColor Green
@@ -68,6 +79,7 @@ if ($existingContent -like "*$markerStart*") {
     Write-Host "Adding dotfiles loader hook to $PROFILE..." -ForegroundColor Green
     Add-Content -Path $PROFILE -Value ("`r`n" + $loaderBlock) -Encoding utf8
 }
+$manifestData.shell_hooks += $PROFILE
 
 # 3. Global Git Configuration Integration
 $gitConfigPath = "$TargetDir\.gitconfig"
@@ -77,7 +89,37 @@ if ((Get-Command git -ErrorAction SilentlyContinue) -and (Test-Path $gitConfigPa
         Write-Host "Configuring global git include.path -> $gitConfigPath" -ForegroundColor Green
         git config --global --add include.path $gitConfigPath
     }
+    $manifestData.git_includes += $gitConfigPath
 }
+
+# 4. Terminal Configuration Auto-Detection (Windows Terminal)
+$wtCandidates = @(
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState",
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState",
+    "$env:LOCALAPPDATA\Microsoft\Windows Terminal"
+)
+foreach ($wtDir in $wtCandidates) {
+    $wtSettings = "$wtDir\settings.json"
+    if (Test-Path $wtSettings) {
+        $wtBackup = "$wtDir\settings.json.pre-dotfiles.bak"
+        if (-not (Test-Path $wtBackup)) {
+            Copy-Item -Path $wtSettings -Destination $wtBackup -Force
+        }
+        Write-Host "✔ Windows Terminal detected -> Backed up to $wtBackup" -ForegroundColor Green
+        $manifestData.terminal_configs += @{
+            name = "windows_terminal"
+            path = $wtSettings
+            backup = $wtBackup
+            patch_strategy = "json_merge"
+        }
+        break
+    }
+}
+
+# 5. Persist Installation State Manifest (.installed.json)
+$manifestFile = "$TargetDir\.installed.json"
+$manifestJson = $manifestData | ConvertTo-Json -Depth 5
+Set-Content -Path $manifestFile -Value $manifestJson -Encoding utf8
 
 Write-Host @"
 

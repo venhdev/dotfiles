@@ -1,0 +1,46 @@
+{
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "actions": [
+        {
+            "name": "Run Apps (Debian 4-Pane Split)",
+            "id": "User.RunApps",
+            "command": {
+                "action": "multipleActions",
+                "actions": [
+                    { "action": "newTab", "profile": "Debian", "tabTitle": "Run Apps" },
+                    { "action": "splitPane", "split": "right", "profile": "Debian" },
+                    { "action": "splitPane", "split": "down", "profile": "Debian" },
+                    { "action": "moveFocus", "direction": "left" },
+                    { "action": "splitPane", "split": "down", "profile": "Debian" }
+                ]
+            }
+        }
+    ],
+    "copyFormatting": "none",
+    "copyOnSelect": false,
+    "keybindings": [
+        { "id": "Terminal.CopyToClipboard", "keys": "ctrl+c" },
+        { "id": "Terminal.PasteFromClipboard", "keys": "ctrl+v" },
+        { "id": "Terminal.DuplicatePaneAuto", "keys": "alt+shift+d" },
+        { "id": "Terminal.SplitPaneRight", "keys": "alt+shift+plus" },
+        { "id": "Terminal.SplitPaneDown", "keys": "alt+shift+minus" },
+        { "id": "Terminal.ClosePane", "keys": "ctrl+shift+w" }
+    ],
+    "newTabMenu": [
+        { "type": "remainingProfiles" }
+    ],
+    "profiles": {
+        "defaults": {
+            "font": {
+                "face": "JetBrainsMono Nerd Font",
+                "size": 11
+            },
+            "cursorShape": "bar",
+            "padding": "8, 8, 8, 8",
+            "historySize": 30000
+        },
+        "list": []
+    },
+    "schemes": []
+}

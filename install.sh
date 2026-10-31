@@ -691,11 +691,19 @@ EOF
 chmod 600 "$DIR/local/local.env.tmp"
 mv "$DIR/local/local.env.tmp" "$DIR/local/local.env"
 
+# Manifest tracking arrays
+MANIFEST_SHELL_HOOKS=("$RC_FILE")
+MANIFEST_SYMLINKS=()
+MANIFEST_GIT_INCLUDES=()
+MANIFEST_TERMINAL_CONFIGS=()
+
 # Symlink Chrome if selected
 if [[ -n "$chrome_path_val" && -x "$chrome_path_val" ]]; then
   mkdir -p "$HOME/.local/bin"
   ln -sfn "$chrome_path_val" "$HOME/.local/bin/chrome"
   ln -sfn "$chrome_path_val" "$HOME/.local/bin/google-chrome"
+  MANIFEST_SYMLINKS+=("{\"link\": \"$HOME/.local/bin/chrome\", \"target\": \"$chrome_path_val\", \"backup\": null}")
+  MANIFEST_SYMLINKS+=("{\"link\": \"$HOME/.local/bin/google-chrome\", \"target\": \"$chrome_path_val\", \"backup\": null}")
 fi
 
 # Sync symlinks in enabled.d
@@ -737,6 +745,7 @@ if command -v git >/dev/null 2>&1; then
     if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
       git config --global --add include.path "$GIT_CONFIG_FILE"
     fi
+    MANIFEST_GIT_INCLUDES+=("$GIT_CONFIG_FILE")
   else
     git config --global --unset-all include.path "$GIT_CONFIG_FILE" 2>/dev/null || true
   fi
@@ -756,11 +765,77 @@ $global:DOTFILES_DIR = "$env:USERPROFILE\.config\dotfiles"
 $dotfilesLoader = "$global:DOTFILES_DIR\powershell\profile.ps1"
 if (Test-Path $dotfilesLoader) { . $dotfilesLoader }
 PS_EOF
+      MANIFEST_SHELL_HOOKS+=("$ps_prof")
     fi
   done
 fi
 
-# 7. Common CLI Tools (if selected)
+# 8. Terminal Configuration (Auto-detected)
+if command -v tmux >/dev/null 2>&1; then
+  tmux_src="$DIR/tmux/.tmux.conf"
+  tmux_dst="$HOME/.tmux.conf"
+  tmux_bak=""
+  if [[ -f "$tmux_src" ]]; then
+    if [[ -e "$tmux_dst" && ! -L "$tmux_dst" ]] || { [[ -L "$tmux_dst" ]] && [[ "$(readlink "$tmux_dst" 2>/dev/null)" != "$tmux_src" ]]; }; then
+      tmux_bak="$HOME/.tmux.conf.pre-dotfiles.bak"
+      cp -f "$tmux_dst" "$tmux_bak" 2>/dev/null || true
+    fi
+    ln -sfn "$tmux_src" "$tmux_dst"
+    MANIFEST_SYMLINKS+=("{\"link\": \"$tmux_dst\", \"target\": \"$tmux_src\", \"backup\": $([[ -n "$tmux_bak" ]] && echo "\"$tmux_bak\"" || echo "null")}")
+    echo "✔ tmux detected -> Linked ~/.tmux.conf"
+  fi
+fi
+
+# 9. Write Installation State Manifest (.installed.json)
+write_manifest() {
+  local manifest_file="$DIR/.installed.json"
+  local now
+  now="$(date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date +"%Y-%m-%dT%H:%M:%SZ")"
+  
+  local shell_hooks_json="[]"
+  if ((${#MANIFEST_SHELL_HOOKS[@]} > 0)); then
+    local items=()
+    for h in "${MANIFEST_SHELL_HOOKS[@]}"; do
+      items+=("\"$h\"")
+    done
+    shell_hooks_json="[ $(IFS=,; echo "${items[*]}") ]"
+  fi
+
+  local git_includes_json="[]"
+  if ((${#MANIFEST_GIT_INCLUDES[@]} > 0)); then
+    local items=()
+    for g in "${MANIFEST_GIT_INCLUDES[@]}"; do
+      items+=("\"$g\"")
+    done
+    git_includes_json="[ $(IFS=,; echo "${items[*]}") ]"
+  fi
+
+  local symlinks_json="[]"
+  if ((${#MANIFEST_SYMLINKS[@]} > 0)); then
+    symlinks_json="[ $(IFS=,; echo "${MANIFEST_SYMLINKS[*]}") ]"
+  fi
+
+  local terminal_configs_json="[]"
+  if ((${#MANIFEST_TERMINAL_CONFIGS[@]} > 0)); then
+    terminal_configs_json="[ $(IFS=,; echo "${MANIFEST_TERMINAL_CONFIGS[*]}") ]"
+  fi
+
+  cat > "$manifest_file.tmp" <<JSON_EOF
+{
+  "version": "1.0.0",
+  "installed_at": "$now",
+  "platform": "$_OS_TYPE",
+  "shell_hooks": $shell_hooks_json,
+  "symlinks": $symlinks_json,
+  "git_includes": $git_includes_json,
+  "terminal_configs": $terminal_configs_json
+}
+JSON_EOF
+  mv "$manifest_file.tmp" "$manifest_file"
+}
+write_manifest
+
+# 10. Common CLI Tools (if selected)
 if (( selected[7] )); then
   if [[ -f "$DIR/scripts/install-tools.sh" ]]; then
     if (( OPT_ALL )); then

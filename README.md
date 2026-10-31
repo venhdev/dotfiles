@@ -236,12 +236,11 @@ conf sysenv      # Opens Windows "System Environment Variables" dialog (sysdm.cp
 
 - **`e <file>`** `🏷️ [Cross-Platform]`: Open file in default `$EDITOR` (auto-detected in priority order: `code` / `micro` → `nvim` → `nano` → `notepad` / `vim`).
 - **`set_editor [name]`** `🏷️ [Cross-Platform]`: Select or directly set and persist default `$EDITOR` across sessions (e.g. `set_editor`, `set_editor notepad`, `set_editor code`, `set_editor nvim`).
-- **`gete <VAR_NAME>`** `[PowerShell]`: Inspect environment variable values across `Process`, `User`, and `Machine` scopes simultaneously.
-  ```powershell
-  gete PATH
-  gete JAVA_HOME
+- **`gete [VAR_NAME]`** `🏷️ [Cross-Platform]`: Inspect environment variables. Run `gete` without arguments to list all active variables in the session, or `gete <NAME>` to query a specific variable (on PowerShell, inspects `Process`, `User`, and `Machine` scopes simultaneously).
+  ```bash
+  gete           # List all active environment variables
+  gete PATH      # Query specific variable
   ```
-- **`ep`** `[PowerShell]`: Shortcut for `conf profile`.
 
 ---
 

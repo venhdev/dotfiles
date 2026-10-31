@@ -6,4 +6,6 @@
 skills-lock.json
 /local/
 /enabled.d/
+.installed.json
+*.bak
 

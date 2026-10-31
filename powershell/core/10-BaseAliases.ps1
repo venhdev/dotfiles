@@ -46,7 +46,8 @@ function dirsize {
             $dirPath = $_.FullName.TrimEnd('\')
             $raw = robocopy $dirPath NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
             $bytes = 0L
-            if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
+            $text = $raw -join "`n"
+            if ($text -match 'Bytes\s*:\s*(\d+)') {
                 $bytes = [int64]$Matches[1]
             }
 
@@ -69,7 +70,8 @@ function dirsize {
             $dirPath = $d.FullName.TrimEnd('\')
             $raw = robocopy $dirPath NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
             $bytes = 0L
-            if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
+            $text = $raw -join "`n"
+            if ($text -match 'Bytes\s*:\s*(\d+)') {
                 $bytes = [int64]$Matches[1]
             }
 
@@ -197,28 +199,43 @@ function h {
     }
 }
 
-# Profile edit shortcut (delegates to canonical 'conf profile')
-function ep { conf profile }
-
-# Inspect Environment Variables across Process, User, and Machine scopes
+# Inspect Environment Variables (run 'gete' to list all, or 'gete <Name>' to query specific variable)
 function gete {
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true, Position = 0)]
+        [Parameter(Position = 0)]
         [string]$Name
     )
 
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        Get-ChildItem Env: | Sort-Object Name | Select-Object Name, Value
+        return
+    }
+
+    $procVal = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    $userVal = [Environment]::GetEnvironmentVariable($Name, 'User')
+    $machVal = [Environment]::GetEnvironmentVariable($Name, 'Machine')
+
+    if ($null -eq $procVal -and $null -eq $userVal -and $null -eq $machVal) {
+        Write-Warning "Environment variable '$Name' not found."
+        return
+    }
+
     @(
         [pscustomobject]@{
+            Name  = $Name
             Scope = 'Process'
-            Value = [Environment]::GetEnvironmentVariable($Name, 'Process')
+            Value = $procVal
         }
         [pscustomobject]@{
+            Name  = $Name
             Scope = 'User'
-            Value = [Environment]::GetEnvironmentVariable($Name, 'User')
+            Value = $userVal
         }
         [pscustomobject]@{
+            Name  = $Name
             Scope = 'Machine'
-            Value = [Environment]::GetEnvironmentVariable($Name, 'Machine')
+            Value = $machVal
         }
     )
 }

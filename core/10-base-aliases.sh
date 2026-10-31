@@ -38,6 +38,23 @@ fi
 alias curlip='curl ifconfig.me' # Quick check of public IP
 alias ports_listen='sudo lsof -i -P -n | grep LISTEN' # Check what's hogging ports
 
+# ENVIRONMENT VARIABLES INSPECTION
+gete() {
+  local key="${1:-}"
+  if [[ -z "$key" ]]; then
+    printenv | sort
+    return 0
+  fi
+
+  local val
+  if val="$(printenv "$key" 2>/dev/null)"; then
+    printf "%s=%s\n" "$key" "$val"
+  else
+    echo "⚠️  Environment variable '$key' not found." >&2
+    return 1
+  fi
+}
+
 # PACKAGE MANAGEMENT ALIASES (Apt on Debian/Ubuntu, or shims to universal pkg)
 if command -v apt-get &>/dev/null; then
   alias aupdate='sudo apt update'

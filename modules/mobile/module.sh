@@ -534,12 +534,12 @@ _shorebird_preflight() {
   }
 
   [[ -f shorebird.yaml ]] || {
-    echo "❌ shorebird.yaml not found (chạy: shorebird init)" >&2
+    echo "❌ shorebird.yaml not found (run: shorebird init)" >&2
     return 1
   }
 
   [[ -f pubspec.yaml ]] || {
-    echo "❌ pubspec.yaml not found (chạy ở project root)" >&2
+    echo "❌ pubspec.yaml not found (run at project root)" >&2
     return 1
   }
 }
@@ -570,7 +570,7 @@ _shorebird_pick() {
     [[ $v == "$opt" ]] && { echo "$v"; return; }
   done
 
-  echo "❌ $label phải là: $* (đã nhận: $v)" >&2
+  echo "❌ $label must be: $* (received: $v)" >&2
   return 1
 }
 
@@ -597,7 +597,7 @@ _flsb_release() {
 
   _shorebird_preflight || return
   command -v fvm &>/dev/null || {
-    echo "❌ fvm not found (cần cho --flutter-version=fvm)" >&2
+    echo "❌ fvm not found (required for --flutter-version=fvm)" >&2
     return 1
   }
 
