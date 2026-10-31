@@ -25,6 +25,8 @@ conf() {
   )
 
   local f k="${1:-}" x l
+  k="${k#conf }"
+  k="${k# }"
 
   for f in "$dotfiles"/core/*.sh "$dotfiles"/modules/*/*.sh "$HOME"/bin/*.sh; do
     [[ -e $f ]] && m[$(basename "$f" .sh)]="$f"
@@ -48,6 +50,8 @@ conf() {
         [[ -n $l ]] && { k=${l%% *}; break; }
       done
     fi
+    k="${k#conf }"
+    k="${k# }"
   fi
 
   [[ -n ${m[$k]:-} ]] || {

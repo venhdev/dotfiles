@@ -1,5 +1,101 @@
 # Quick configuration opener for Windows PowerShell (conf)
 
+function Get-ConfigEditor {
+    if ($env:EDITOR) {
+        $env:EDITOR
+    } elseif ($env:DOTFILES_EDITOR) {
+        $env:DOTFILES_EDITOR
+    } elseif (Get-Command code -ErrorAction SilentlyContinue) {
+        "code"
+    } else {
+        "notepad.exe"
+    }
+}
+
+function e {
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Path
+    )
+    $editor = Get-ConfigEditor
+    if ($Path) {
+        & $editor @Path
+    } else {
+        & $editor
+    }
+}
+
+function set_editor {
+    param(
+        [Parameter(Position = 0)]
+        [string]$Name = ""
+    )
+
+    $commonEditors = @("notepad", "code", "nvim", "vim", "micro", "nano", "cursor", "subl")
+
+    # If no argument passed, scan installed editors and prompt interactive menu
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        $detected = @()
+        foreach ($ed in $commonEditors) {
+            if (Get-Command $ed -ErrorAction SilentlyContinue) {
+                $detected += $ed
+            }
+        }
+        if ($detected.Count -eq 0) { $detected = @("notepad") }
+
+        Write-Host "=== Select Default Editor ===" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $detected.Count; $i++) {
+            $currentTag = if ($env:EDITOR -eq $detected[$i]) { " [current]" } else { "" }
+            Write-Host ("  {0}) {1}{2}" -f ($i + 1), $detected[$i], $currentTag)
+        }
+        $pick = Read-Host "`nEnter number (1-$($detected.Count)) or custom command"
+        if ([string]::IsNullOrWhiteSpace($pick)) { return }
+
+        if ($pick -match '^[0-9]+$' -and [int]$pick -ge 1 -and [int]$pick -le $detected.Count) {
+            $Name = $detected[[int]$pick - 1]
+        } else {
+            $Name = $pick.Trim()
+        }
+    }
+
+    # Verify command availability
+    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+        Write-Warning "Command '$Name' was not found on PATH. Setting anyway..."
+    }
+
+    # 1. Update current session
+    $env:EDITOR = $Name
+    $env:VISUAL = $Name
+
+    # 2. Persist to Windows User Environment
+    [Environment]::SetEnvironmentVariable("EDITOR", $Name, "User")
+    [Environment]::SetEnvironmentVariable("VISUAL", $Name, "User")
+
+    # 3. Persist to ~/.env if present or update key
+    $userEnv = "$env:USERPROFILE\.env"
+    if (Test-Path $userEnv) {
+        $lines = Get-Content $userEnv -ErrorAction SilentlyContinue
+        $found = $false
+        $newLines = @()
+        foreach ($l in $lines) {
+            if ($l -match '^\s*EDITOR\s*=') {
+                $newLines += "EDITOR=$Name"
+                $found = $true
+            } else {
+                $newLines += $l
+            }
+        }
+        if (-not $found) {
+            $newLines += "EDITOR=$Name"
+        }
+        Set-Content -Path $userEnv -Value $newLines -Encoding utf8
+    }
+
+    Write-Host "✓ Default EDITOR set and persisted to '$Name'" -ForegroundColor Green
+}
+
+Set-Alias -Name Set-Editor -Value set_editor -ErrorAction SilentlyContinue
+
 function conf {
     param(
         [Parameter(Position = 0)]
@@ -44,6 +140,11 @@ function conf {
         if ([string]::IsNullOrWhiteSpace($Key)) { return }
     }
 
+    $Key = $Key.Trim()
+    if ($Key -match '^conf\s+(.+)$') {
+        $Key = $Matches[1].Trim()
+    }
+
     if ($Key -eq "sysenv") {
         Write-Host "Opening Windows Environment Variables dialog..." -ForegroundColor Green
         Start-Process "rundll32.exe" -ArgumentList "sysdm.cpl,EditEnvironmentVariables"
@@ -62,14 +163,7 @@ function conf {
             New-Item -ItemType File -Path $target -Force | Out-Null
         }
 
-        $editor = if ($env:EDITOR) {
-            $env:EDITOR
-        } elseif (Get-Command code -ErrorAction SilentlyContinue) {
-            "code"
-        } else {
-            "notepad.exe"
-        }
-
+        $editor = Get-ConfigEditor
         Write-Host "Opening $target with $editor..." -ForegroundColor Green
         & $editor $target
     } else {

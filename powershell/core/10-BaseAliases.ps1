@@ -8,6 +8,78 @@ function ... { Set-Location ../.. }
 function ll { Get-ChildItem -Path (Get-Item -Path $PWD) }
 function la { Get-ChildItem -Path (Get-Item -Path $PWD) -Force }
 
+# Directory Disk Usage (Cross-Platform 'dirsize' / 'ds')
+function dirsize {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position = 0)]
+        [string]$Path = ".",
+        [Parameter(Position = 1)]
+        [int]$Top = 0
+    )
+
+    $targetPath = $Path
+    if ($Path -match '^[0-9]+$' -and $Top -eq 0) {
+        $Top = [int]$Path
+        $targetPath = "."
+    }
+
+    $targetDir = try {
+        (Resolve-Path -Path $targetPath -ErrorAction Stop).Path
+    } catch {
+        Write-Error "Directory not found: $targetPath"
+        return
+    }
+
+    $subDirs = @(Get-ChildItem -Path $targetDir -Directory -Force -ErrorAction SilentlyContinue)
+    if ($subDirs.Count -eq 0) {
+        Write-Host "No subdirectories found in '$targetDir'." -ForegroundColor Yellow
+        return
+    }
+
+    $worker = {
+        param($dirFullName, $dirName)
+        $raw = robocopy $dirFullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
+        $bytes = 0L
+        if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
+            $bytes = [int64]$Matches[1]
+        }
+
+        $human = switch ($bytes) {
+            { $_ -ge 1GB } { "{0:N2} GB" -f ($_ / 1GB); break }
+            { $_ -ge 1MB } { "{0:N2} MB" -f ($_ / 1MB); break }
+            { $_ -ge 1KB } { "{0:N2} KB" -f ($_ / 1KB); break }
+            default        { "$_ B" }
+        }
+
+        [PSCustomObject]@{
+            Folder     = $dirName
+            Size       = $human
+            GB         = [math]::Round($bytes / 1GB, 3)
+            TotalBytes = $bytes
+        }
+    }
+
+    $results = if ($PSVersionTable.PSVersion.Major -ge 7) {
+        $subDirs | ForEach-Object -Parallel {
+            $w = $using:worker
+            & $w $_.FullName $_.Name
+        } -ThrottleLimit 8
+    } else {
+        foreach ($d in $subDirs) {
+            & $worker $d.FullName $d.Name
+        }
+    }
+
+    $sorted = $results | Sort-Object TotalBytes -Descending
+    if ($Top -gt 0) {
+        $sorted = $sorted | Select-Object -First $Top
+    }
+
+    $sorted
+}
+Set-Alias -Name ds -Value dirsize -ErrorAction SilentlyContinue
+
 # Screen Clear
 Set-Alias -Name cl -Value Clear-Host -ErrorAction SilentlyContinue
 

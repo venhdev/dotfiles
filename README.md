@@ -102,6 +102,28 @@ h "git commit" 3
 
 ---
 
+### 📊 Directory Disk Usage: `dirsize` / `ds`
+
+`🏷️ [Cross-Platform]` **`dirsize [path] [limit]`** (Alias: **`ds`**)
+Fast subfolder storage analyzer listing immediate subdirectories sorted descending by disk space:
+- **Windows (PowerShell)**: High-speed multi-threaded Robocopy kernel scan (`/NFL /NDL /XJ /R:0 /W:0`) avoiding NTFS junction loops and deep `.NET` object allocation overhead. Auto-parallelized across 8 threads on PowerShell 7+.
+- **Linux / macOS (POSIX)**: High-speed `du` scan sorted numerically with automatic human-readable unit scaling (B, KB, MB, GB).
+
+```bash
+# Analyze subdirectories in current working directory
+ds
+
+# Analyze a specific path
+ds D:\Develop
+ds /var/log
+
+# Limit output to top N largest folders
+ds 5
+ds /var/log 10
+```
+
+---
+
 ## 3. Command Audit Log & Smart Re-run
 
 The **Confirmed Command Audit Log** records critical command executions, exit codes, elapsed durations, and working directories in `~/.config/dotfiles/.cmdlog`.
@@ -194,8 +216,8 @@ conf sysenv      # Opens Windows "System Environment Variables" dialog (sysdm.cp
 
 ### 📝 Editor & Environment Inspection
 
-- **`e <file>`** `[POSIX]`: Open file in default `$EDITOR` (auto-detected in priority order: `micro` → `nvim` → `nano` → `vim`).
-- **`set_editor`** `[POSIX]`: Interactive menu to switch `$EDITOR`.
+- **`e <file>`** `🏷️ [Cross-Platform]`: Open file in default `$EDITOR` (auto-detected in priority order: `code` / `micro` → `nvim` → `nano` → `notepad` / `vim`).
+- **`set_editor [name]`** `🏷️ [Cross-Platform]`: Select or directly set and persist default `$EDITOR` across sessions (e.g. `set_editor`, `set_editor notepad`, `set_editor code`, `set_editor nvim`).
 - **`gete <VAR_NAME>`** `[PowerShell]`: Inspect environment variable values across `Process`, `User`, and `Machine` scopes simultaneously.
   ```powershell
   gete PATH
@@ -412,7 +434,7 @@ dotfiles/
 │       ├── 10-BaseAliases.ps1       # Base aliases, PSReadLine history (h), env inspection (gete), venv
 │       ├── 15-CmdLog.ps1            # PowerShell Confirmed Command Audit Log (clog, cr)
 │       ├── 20-WslHost.ps1           # Host WSL management & VHDX compaction (wslcompact, gete)
-│       └── 30-Config.ps1            # PowerShell config opener (conf profile, env, sysenv, git)
+│       └── 30-Config.ps1            # Config opener and editor tools (conf, set_editor, e)
 ├── modules/                         # Optional Modular Extensions
 │   ├── ssh/module.sh                # SSH agent auto-start & key loader (ssha)
 │   ├── wsl/module.sh                # Windows/WSL interop (clip, explorer, winpath, opene, gete, wcp)

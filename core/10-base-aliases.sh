@@ -80,6 +80,91 @@ alias ll='ls -haltF' # Long list, hidden files, human sizes
 alias la='ls -A'
 alias l='ls -CF'
 alias lsize='ls -lSrh' # Sort by size, largest at bottom
+
+# DIRECTORY DISK USAGE (POSIX: Linux, macOS, WSL, default limit: none)
+unalias ds 2>/dev/null || true
+unalias dirsize 2>/dev/null || true
+dirsize() {
+  local target="."
+  local limit=""
+
+  case $# in
+    0)
+      target="."
+      limit=""
+      ;;
+    1)
+      if [[ "$1" =~ ^[0-9]+$ ]]; then
+        limit="$1"
+        target="."
+      else
+        target="$1"
+        limit=""
+      fi
+      ;;
+    *)
+      if [[ "$2" =~ ^[0-9]+$ ]]; then
+        target="$1"
+        limit="$2"
+      elif [[ "$1" =~ ^[0-9]+$ ]]; then
+        limit="$1"
+        target="$2"
+      else
+        target="$1"
+        limit=""
+      fi
+      ;;
+  esac
+
+  if [[ ! -d "$target" ]]; then
+    echo "❌ Directory not found: $target" >&2
+    return 1
+  fi
+
+  local clean_target="${target%/}"
+  [[ -z "$clean_target" ]] && clean_target="/"
+
+  local cmd
+  if du -d 1 -k /dev/null &>/dev/null; then
+    cmd="du -d 1 -k \"$target\" 2>/dev/null"
+  else
+    cmd="du -k --max-depth=1 \"$target\" 2>/dev/null"
+  fi
+
+  local raw_output
+  raw_output="$(eval "$cmd" | grep -v -E "[[:space:]]+(\./?|${clean_target})$" | sort -nr)"
+
+  if [[ -z "$raw_output" ]]; then
+    echo "No subdirectories found in '$target'."
+    return 0
+  fi
+
+  local awk_script='
+  function human(k) {
+    if (k >= 1048576) return sprintf("%.2f GB", k / 1048576);
+    if (k >= 1024) return sprintf("%.2f MB", k / 1024);
+    return sprintf("%d KB", k);
+  }
+  BEGIN {
+    printf "%-12s %s\n", "SIZE", "DIRECTORY";
+    printf "%-12s %s\n", "----", "---------";
+  }
+  {
+    kb = $1;
+    $1 = "";
+    sub(/^[[:space:]]+/, "");
+    printf "%-12s %s\n", human(kb), $0;
+  }
+  '
+
+  if [[ -n "$limit" ]]; then
+    printf "%s\n" "$raw_output" | head -n "$limit" | awk "$awk_script"
+  else
+    printf "%s\n" "$raw_output" | awk "$awk_script"
+  fi
+}
+ds() { dirsize "$@"; }
+alias ds='dirsize'
 # HISTORY SEARCH (POSIX: Bash & Zsh, default limit: 10)
 unalias h 2>/dev/null || true
 h() {
