@@ -37,37 +37,49 @@ function dirsize {
         return
     }
 
-    $worker = {
-        param($dirFullName, $dirName)
-        $raw = robocopy $dirFullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
-        $bytes = 0L
-        if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
-            $bytes = [int64]$Matches[1]
-        }
-
-        $human = switch ($bytes) {
-            { $_ -ge 1GB } { "{0:N2} GB" -f ($_ / 1GB); break }
-            { $_ -ge 1MB } { "{0:N2} MB" -f ($_ / 1MB); break }
-            { $_ -ge 1KB } { "{0:N2} KB" -f ($_ / 1KB); break }
-            default        { "$_ B" }
-        }
-
-        [PSCustomObject]@{
-            Folder     = $dirName
-            Size       = $human
-            GB         = [math]::Round($bytes / 1GB, 3)
-            TotalBytes = $bytes
-        }
-    }
-
     $results = if ($PSVersionTable.PSVersion.Major -ge 7) {
         $subDirs | ForEach-Object -Parallel {
-            $w = $using:worker
-            & $w $_.FullName $_.Name
+            $raw = robocopy $_.FullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
+            $bytes = 0L
+            if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
+                $bytes = [int64]$Matches[1]
+            }
+
+            $human = switch ($bytes) {
+                { $_ -ge 1GB } { "{0:N2} GB" -f ($_ / 1GB); break }
+                { $_ -ge 1MB } { "{0:N2} MB" -f ($_ / 1MB); break }
+                { $_ -ge 1KB } { "{0:N2} KB" -f ($_ / 1KB); break }
+                default        { "$_ B" }
+            }
+
+            [PSCustomObject]@{
+                Folder     = $_.Name
+                Size       = $human
+                GB         = [math]::Round($bytes / 1GB, 3)
+                TotalBytes = $bytes
+            }
         } -ThrottleLimit 8
     } else {
         foreach ($d in $subDirs) {
-            & $worker $d.FullName $d.Name
+            $raw = robocopy $d.FullName NULL /L /S /NFL /NDL /NJH /NC /NP /BYTES /XJ /R:0 /W:0 2>$null
+            $bytes = 0L
+            if (($raw -match '^\s*Bytes\s*:') -and ($raw -match 'Bytes\s*:\s*(\d+)')) {
+                $bytes = [int64]$Matches[1]
+            }
+
+            $human = switch ($bytes) {
+                { $_ -ge 1GB } { "{0:N2} GB" -f ($_ / 1GB); break }
+                { $_ -ge 1MB } { "{0:N2} MB" -f ($_ / 1MB); break }
+                { $_ -ge 1KB } { "{0:N2} KB" -f ($_ / 1KB); break }
+                default        { "$_ B" }
+            }
+
+            [PSCustomObject]@{
+                Folder     = $d.Name
+                Size       = $human
+                GB         = [math]::Round($bytes / 1GB, 3)
+                TotalBytes = $bytes
+            }
         }
     }
 
