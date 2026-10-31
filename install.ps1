@@ -1,10 +1,10 @@
 # Dotfiles Windows PowerShell Installer
 # Usage:
-#   irm https://raw.githubusercontent.com/venhdev/dotfiles/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/venhdev/zen/main/install.ps1 | iex
 
 [CmdletBinding()]
 param(
-    [string]$RepoUrl = "https://github.com/venhdev/dotfiles.git",
+    [string]$RepoUrl = "https://github.com/venhdev/zen.git",
     [string]$TargetDir = "$env:USERPROFILE\.config\dotfiles"
 )
 

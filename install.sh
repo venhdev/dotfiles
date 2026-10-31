@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-REPO="https://github.com/venhdev/dotfiles.git"
+REPO="https://github.com/venhdev/zen.git"
 DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
 
 # Load SSOT platform detection library if present, or provide minimal bootstrap fallbacks
