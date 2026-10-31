@@ -60,6 +60,7 @@ Usage:
   clog clip [index]       Copy command to clipboard (default: latest)
 
   cr [query|index]        Interactive picker or direct rerun by index
+  cr -f [query]           Use fzf fuzzy finder if preferred
   cr -e [index]           Edit command before rerun (Readline prompt)
   cr -d [query]           Rerun scoped to current directory ($PWD)
 
@@ -258,9 +259,7 @@ _cmdlog_list() {
 
 _cmdlog_copy_to_clip() {
   local to_copy="$1"
-  if command -v clip >/dev/null 2>&1; then
-    printf '%s' "$to_copy" | clip
-  elif command -v clip.exe >/dev/null 2>&1; then
+  if command -v clip.exe >/dev/null 2>&1; then
     printf '%s' "$to_copy" | clip.exe
   elif command -v wl-copy >/dev/null 2>&1; then
     printf '%s' "$to_copy" | wl-copy
@@ -268,6 +267,14 @@ _cmdlog_copy_to_clip() {
     printf '%s' "$to_copy" | pbcopy
   elif command -v xclip >/dev/null 2>&1; then
     printf '%s' "$to_copy" | xclip -selection clipboard
+  elif command -v clip >/dev/null 2>&1; then
+    printf '%s' "$to_copy" | clip
+  fi
+  # Emit OSC 52 clipboard escape sequence for terminal / SSH / tmux integration
+  if command -v base64 >/dev/null 2>&1; then
+    local b64
+    b64=$(printf '%s' "$to_copy" | base64 | tr -d '\r\n')
+    printf '\033]52;c;%s\a' "$b64" >/dev/tty 2>/dev/null || true
   fi
   echo "✓ Copied to clipboard: $to_copy"
 }
@@ -319,10 +326,14 @@ _cmdlog_tui_select() {
     printf "\033[H\033[2J" >/dev/tty
     printf "\033[1;34m=== %s ===\033[0m\n" "$prompt_title" >/dev/tty
     if ((search_mode)); then
-      printf "\033[1;33m[SEARCH]\033[0m Query: \033[1m%s\033[0m█ \033[90m(Type to filter | Enter: Run | Tab: Copy | Esc: Clear)\033[0m\n" "$filter_query" >/dev/tty
+      printf "\033[1;33m[SEARCH]\033[0m Query: \033[1m%s\033[0m█ \033[90m(Enter/Esc: Done searching | ↑/↓: Select | Tab: Copy)\033[0m\n" "$filter_query" >/dev/tty
     else
-      printf "\033[90m[↑/↓/j/k] Select | [/] Search | [c] Copy | [r/Enter] Run | [q] Cancel\033[0m\n" >/dev/tty
-      [[ -n "$filter_query" ]] && printf "\033[0;33mFiltered by:\033[0m '%s' \033[90m(press / to edit)\033[0m\n" "$filter_query" >/dev/tty
+      if [[ -n "$filter_query" ]]; then
+        printf "\033[90m[↑/↓/j/k] Select | [/] Search | [c] Copy | [r/Enter] Run | [Esc] Clear filter | [q] Cancel\033[0m\n" >/dev/tty
+        printf "\033[0;33mFiltered by:\033[0m '%s' \033[90m(press / to edit, Esc to clear)\033[0m\n" "$filter_query" >/dev/tty
+      else
+        printf "\033[90m[↑/↓/j/k] Select | [/] Search | [c] Copy | [r/Enter] Run | [q] Cancel\033[0m\n" >/dev/tty
+      fi
     fi
     printf "\n" >/dev/tty
 
@@ -370,18 +381,15 @@ _cmdlog_tui_select() {
 
     if ((search_mode)); then
       if [[ $key == $'\x1b' ]]; then
-        read -rsn2 -t 0.05 seq < /dev/tty || true
+        read -rsn2 -t 0.02 seq < /dev/tty || true
         case "$seq" in
           "[A"|"OA") ((cursor > 0)) && cursor=$((cursor - 1)) ;;
           "[B"|"OB") ((cursor < f_count - 1)) && cursor=$((cursor + 1)) ;;
-          "") search_mode=0; filter_query=""; _update_filter ;;
+          "") search_mode=0 ;; # Plain Esc exits search mode to navigation mode, keeping filter_query
         esac
       elif [[ $key == "" || $key == $'\n' || $key == $'\r' ]]; then
-        if ((f_count > 0)); then
-          TUI_ACTION="RUN"
-          TUI_CHOSEN_IDX="${filtered_indices[cursor]}"
-          return 0
-        fi
+        # Enter exits search mode to navigation mode, keeping filter_query
+        search_mode=0
       elif [[ $key == $'\t' ]]; then
         if ((f_count > 0)); then
           TUI_ACTION="COPY"
@@ -404,11 +412,19 @@ _cmdlog_tui_select() {
 
     # Normal navigation mode
     if [[ $key == $'\x1b' ]]; then
-      read -rsn2 -t 0.05 seq < /dev/tty || true
+      read -rsn2 -t 0.02 seq < /dev/tty || true
       case "$seq" in
         "[A"|"OA") ((cursor > 0)) && cursor=$((cursor - 1)) ;;
         "[B"|"OB") ((cursor < f_count - 1)) && cursor=$((cursor + 1)) ;;
-        "") TUI_ACTION="CANCEL"; return 0 ;;
+        "")
+          if [[ -n "$filter_query" ]]; then
+            filter_query=""
+            _update_filter
+          else
+            TUI_ACTION="CANCEL"
+            return 0
+          fi
+          ;;
       esac
     elif [[ $key == "k" || $key == "K" ]]; then
       ((cursor > 0)) && cursor=$((cursor - 1))
@@ -443,10 +459,21 @@ _cmdlog_run() {
   local query=""
   local cwd_only=0
   local edit_mode=0
+  local use_fzf=0
   local target_idx=""
+
+  [[ -n "${DOTFILES_CR_FZF:-}" ]] && use_fzf=1
 
   while (($# > 0)); do
     case "$1" in
+      -f|--fzf)
+        use_fzf=1
+        shift
+        ;;
+      --no-fzf)
+        use_fzf=0
+        shift
+        ;;
       -e|--edit)
         edit_mode=1
         shift
@@ -512,22 +539,31 @@ _cmdlog_run() {
     [[ -n $query ]] && title="Rerun Commands matching '$query' (latest $total)"
 
     if [[ -t 0 && -t 1 ]] && [[ -e /dev/tty ]]; then
-      # Tier 1: fzf if available and not disabled
-      if command -v fzf >/dev/null 2>&1 && [[ -z "${DOTFILES_NO_FZF:-}" ]]; then
+      # Optional: fzf mode if explicitly requested (-f or DOTFILES_CR_FZF=1)
+      if ((use_fzf)) && command -v fzf >/dev/null 2>&1; then
         local fzf_input=""
         local i
         for i in "${!entries[@]}"; do
           IFS=$'\t' read -r ts status dur cwd cmd <<< "${entries[i]}"
           local short_cwd="$(_cmdlog_shorten_path "$cwd")"
-          fzf_input+="$((i + 1))\t$ts\t[$status]\t[$short_cwd]\t$cmd"$'\n'
+          local st_color=""
+          case "$status" in
+            0)   st_color=$'\033[1;32m[OK]\033[0m' ;;
+            "-") st_color=$'\033[0;90m[-]\033[0m' ;;
+            *)   st_color=$'\033[1;31m[ERR:'"$status"']\033[0m' ;;
+          esac
+          fzf_input+="$((i + 1))"$'\t'"$ts"$'\t'"$st_color"$'\t'"[$short_cwd]"$'\t'"$cmd"$'\n'
         done
 
         local fzf_res
         fzf_res=$(printf '%s' "$fzf_input" | fzf \
+          --ansi \
           --height 50% \
           --reverse \
-          --delimiter $'\t' \
+          --delimiter=$'\t' \
           --with-nth 1,2,3,4,5 \
+          --preview 'echo -e "\033[1;36mCommand:\033[0m\n{5}"' \
+          --preview-window=down:3:wrap \
           --prompt="Rerun > " \
           --header="[Enter] Run | [Ctrl-Y/Alt-C] Copy | [Esc] Cancel" \
           --expect=enter,ctrl-y,alt-c \
@@ -556,7 +592,7 @@ _cmdlog_run() {
         chosen_idx="$chosen_num"
         interactive_choice=1
       else
-        # Tier 2: Pure Bash Native TUI
+        # Default Tier 1: Pure Bash Native TUI (Option 2: 2-line layout, single key actions)
         TUI_ACTION=""
         TUI_CHOSEN_IDX=""
         _cmdlog_tui_select "$title" "${entries[@]}"
