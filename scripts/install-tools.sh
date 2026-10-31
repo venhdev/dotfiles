@@ -88,12 +88,13 @@ _get_tool_version() {
       rg --version 2>/dev/null | awk 'NR==1{print $2}'
       ;;
     lazygit)
-      local lzv
-      lzv="$(lazygit --version 2>/dev/null | grep -Po 'version=\K[^,]+' || true)"
-      if [[ -n "$lzv" ]]; then
-        echo "$lzv"
+      local raw lz_re
+      raw="$(lazygit --version 2>/dev/null || true)"
+      lz_re="(, |^)version=[^0-9]*([0-9]+\.[0-9]+(\.[0-9]+)?)"
+      if [[ "$raw" =~ $lz_re ]]; then
+        echo "${BASH_REMATCH[2]}"
       else
-        lazygit --version 2>/dev/null | awk '{print $6}'
+        echo "installed"
       fi
       ;;
     delta)
