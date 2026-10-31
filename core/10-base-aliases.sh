@@ -3,7 +3,8 @@
 # ENVIRONMENT & RELOAD
 alias rebash='exec bash'
 alias rezsh='exec zsh'
-alias insdf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
+alias insdf='zen setup' # Dotfiles modular setup & provisioning
+alias ins='zen i'       # Fast shorthand for zen install
 alias ts='date +%s'
 
 # PYTHON VENV
@@ -47,7 +48,7 @@ gete() {
   fi
 }
 
-# PACKAGE MANAGEMENT ALIASES (Apt on Debian/Ubuntu, or shims to universal pkg)
+# PACKAGE MANAGEMENT ALIASES (Apt on Debian/Ubuntu, or shims to universal zen)
 if command -v apt-get &>/dev/null; then
   alias aupdate='sudo apt update'
   alias aupgrade='sudo apt update && sudo apt upgrade -y'
@@ -60,11 +61,11 @@ if command -v apt-get &>/dev/null; then
     _run_confirm sudo apt autoremove
   }
 else
-  alias aupdate='pkg update'
-  alias aupgrade='pkg upgrade'
-  alias ainstall='pkg install'
-  alias aremove='pkg remove'
-  alias asearch='pkg search'
+  alias aupdate='zen update'
+  alias aupgrade='zen upgrade'
+  alias ainstall='zen i'
+  alias aremove='zen rm'
+  alias asearch='zen search'
 fi
 
 # PROCESS & SYSTEM MONITORING
@@ -241,16 +242,5 @@ alias lst1='tree -a -h -L 1'
 alias dfh='df -h'
 alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20'
 
-# Package & Tools Notebook Manager
-tools() {
-  local installer="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/scripts/install-tools.sh"
-  if [[ -f "$installer" ]]; then
-    bash "$installer" "$@"
-  else
-    echo "Error: Tools notebook installer not found at $installer" >&2
-    return 1
-  fi
-}
-alias pkg='tools'
 alias lg='lazygit'
 

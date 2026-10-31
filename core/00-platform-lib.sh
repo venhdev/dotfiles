@@ -165,12 +165,250 @@ open_target() {
   esac
 }
 
-# Unified Package Manager abstraction (apt, brew, pacman, dnf, winget, scoop)
-pkg() {
-  local action="${1:-help}"
-  shift 2>/dev/null || true
+# Self-locating Dotfiles Root Resolver
+_get_dotfiles_root() {
+  if [[ -n "${DOTFILES:-}" && -d "$DOTFILES" ]]; then
+    echo "$DOTFILES"
+    return
+  fi
+  if [[ -n "${DOTFILES_DIR:-}" && -d "$DOTFILES_DIR" ]]; then
+    echo "$DOTFILES_DIR"
+    return
+  fi
+  local self_dir
+  self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || true)"
+  if [[ -n "$self_dir" && -d "$self_dir/.." && -f "$self_dir/../install.sh" ]]; then
+    (cd "$self_dir/.." && pwd)
+    return
+  fi
+  local xdg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
+  if [[ -d "$xdg_dir" ]]; then
+    echo "$xdg_dir"
+    return
+  fi
+  echo "$HOME/.config/dotfiles"
+}
 
-  # Detect installed package manager
+# zen: Unified Ecosystem Gateway, Package Manager & Tools Orchestrator
+zen() {
+  local subcmd="${1:-}"
+  local dotfiles_root="$(_get_dotfiles_root)"
+
+  case "$subcmd" in
+    ""|tui)
+      local installer="$dotfiles_root/scripts/install-tools.sh"
+      if [[ -f "$installer" ]]; then
+        bash "$installer"
+      else
+        echo "Error: Developer tools notebook installer not found at $installer" >&2
+        return 1
+      fi
+      ;;
+
+    i|install)
+      shift
+      _zen_cmd_install "$@"
+      ;;
+
+    rm|remove|uninstall)
+      shift
+      _zen_cmd_remove "$@"
+      ;;
+
+    update|up)
+      shift
+      _zen_cmd_update "$@"
+      ;;
+
+    upgrade)
+      shift
+      _zen_cmd_upgrade "$@"
+      ;;
+
+    search)
+      shift
+      _zen_cmd_search "$@"
+      ;;
+
+    setup|init)
+      shift
+      local installer="$dotfiles_root/install.sh"
+      if [[ -f "$installer" ]]; then
+        bash "$installer" "$@"
+      else
+        echo "Error: Dotfiles installer not found at $installer" >&2
+        return 1
+      fi
+      ;;
+
+    sync)
+      shift
+      _zen_cmd_sync "$@"
+      ;;
+
+    doctor)
+      shift
+      local doctor_lib="$dotfiles_root/core/45-doctor-lib.sh"
+      if [[ -f "$doctor_lib" ]]; then
+        # shellcheck source=./45-doctor-lib.sh
+        . "$doctor_lib"
+        _zen_doctor "$@"
+      else
+        echo "Error: Doctor module not found at $doctor_lib" >&2
+        return 1
+      fi
+      ;;
+
+    ali|alias)
+      shift
+      local alias_lib="$dotfiles_root/core/12-alias-catalog-lib.sh"
+      if [[ -f "$alias_lib" ]]; then
+        # shellcheck source=./12-alias-catalog-lib.sh
+        . "$alias_lib"
+        _zen_alias_catalog "$@"
+      else
+        echo "Error: Alias catalog module not found at $alias_lib" >&2
+        return 1
+      fi
+      ;;
+
+    --all|-a)
+      local installer="$dotfiles_root/scripts/install-tools.sh"
+      if [[ -f "$installer" ]]; then
+        bash "$installer" --all
+      else
+        echo "Error: Developer tools notebook installer not found at $installer" >&2
+        return 1
+      fi
+      ;;
+
+    -h|--help|help)
+      _zen_help
+      ;;
+
+    *)
+      echo "❌ Unknown subcommand: '$subcmd'" >&2
+      echo "Run 'zen --help' for available commands and usage." >&2
+      return 1
+      ;;
+  esac
+}
+
+_zen_cmd_install() {
+  if [[ $# -eq 0 ]]; then
+    echo "❌ Error: Missing package name or option." >&2
+    echo
+    echo "Usage:" >&2
+    echo "  zen i <pkg...>       Install system package(s) or managed tool(s)" >&2
+    echo "  zen i --all          Batch install all missing managed tools" >&2
+    return 1
+  fi
+
+  if [[ "$1" == "--all" || "$1" == "-a" ]]; then
+    local installer="$(_get_dotfiles_root)/scripts/install-tools.sh"
+    bash "$installer" --all
+    return $?
+  fi
+
+  _zen_package_action "install" "$@"
+}
+
+_zen_cmd_remove() {
+  if [[ $# -eq 0 ]]; then
+    echo "❌ Error: Missing package name to remove." >&2
+    echo
+    echo "Usage:" >&2
+    echo "  zen rm <pkg...>      Uninstall package(s)" >&2
+    return 1
+  fi
+  _zen_package_action "remove" "$@"
+}
+
+_zen_cmd_update() {
+  local check_all=0
+  if [[ "${1:-}" == "--all" || "${1:-}" == "-a" ]]; then
+    check_all=1
+  fi
+
+  echo "==> Updating package repository indexes..."
+  _zen_package_action "update"
+
+  if (( check_all )); then
+    echo
+    echo "==> Tracking managed developer tools..."
+    local manifest_file="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.installed.json"
+    if [[ -f "$manifest_file" ]] && command -v python3 >/dev/null 2>&1; then
+      python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+    tools = data.get("tools", {})
+    if tools:
+        print(f"Tracking {len(tools)} managed tools in .installed.json:")
+        for k, v in sorted(tools.items()):
+            print(f"  • {k:10s} (v{v.get(\"installed_version\", \"?\")}) origin: {v.get(\"origin\", \"?\")}")
+except Exception:
+    pass
+' "$manifest_file" 2>/dev/null || true
+    fi
+  fi
+}
+
+_zen_cmd_upgrade() {
+  if [[ $# -eq 0 ]]; then
+    echo "⚠️  Notice: 'zen upgrade' requires an explicit target to prevent unintended system-wide modifications." >&2
+    echo
+    echo "Usage:" >&2
+    echo "  zen upgrade --all       Upgrade system packages AND managed developer tools" >&2
+    echo "  zen upgrade system      Upgrade system packages only (apt/brew/pacman/winget)" >&2
+    echo "  zen upgrade <pkg...>    Upgrade/reinstall specific package(s)" >&2
+    return 1
+  fi
+
+  case "$1" in
+    --all|-a)
+      echo "==> Upgrading system packages..."
+      _zen_package_action "upgrade"
+      echo
+      echo "==> Updating managed developer tools..."
+      local installer="$(_get_dotfiles_root)/scripts/install-tools.sh"
+      bash "$installer" --all
+      ;;
+    system)
+      echo "==> Upgrading system packages..."
+      _zen_package_action "upgrade"
+      ;;
+    *)
+      _zen_package_action "install" "$@"
+      ;;
+  esac
+}
+
+_zen_cmd_search() {
+  if [[ $# -eq 0 ]]; then
+    echo "❌ Error: Missing search query." >&2
+    echo "Usage: zen search <query>" >&2
+    return 1
+  fi
+  _zen_package_action "search" "$@"
+}
+
+_zen_cmd_sync() {
+  local dotfiles_root="$(_get_dotfiles_root)"
+  echo "==> Synchronizing dotfiles repository ($dotfiles_root)..."
+  if [[ -d "$dotfiles_root/.git" ]]; then
+    git -C "$dotfiles_root" pull --rebase || {
+      echo "Warning: git pull failed; proceeding with setup." >&2
+    }
+  fi
+  bash "$dotfiles_root/install.sh" "$@"
+}
+
+_zen_package_action() {
+  local action="$1"
+  shift
+
   local mgr=""
   if command -v brew &>/dev/null; then
     mgr="brew"
@@ -242,21 +480,53 @@ pkg() {
         scoop)  scoop search "$@" ;;
       esac
       ;;
-    *)
-      cat <<EOF
-Usage: pkg <command> [arguments...]
-
-Supported commands:
-  pkg update             Refresh package repository indexes
-  pkg upgrade            Upgrade all installed packages
-  pkg install <package>  Install a package
-  pkg remove <package>   Uninstall a package
-  pkg search <query>     Search for packages
-
-Active manager detected: $mgr
-EOF
-      ;;
   esac
+}
+
+_zen_help() {
+  local mgr=""
+  if command -v brew &>/dev/null; then
+    mgr="brew"
+  elif command -v apt-get &>/dev/null; then
+    mgr="apt"
+  elif command -v pacman &>/dev/null; then
+    mgr="pacman"
+  elif command -v dnf &>/dev/null; then
+    mgr="dnf"
+  elif command -v winget.exe &>/dev/null; then
+    mgr="winget"
+  elif command -v scoop &>/dev/null; then
+    mgr="scoop"
+  fi
+
+  cat <<EOF
+zen - Unified Ecosystem Gateway & Developer Tool Orchestrator
+
+Usage:
+  zen [subcommand] [arguments...]
+
+TUI & Tools Notebook:
+  zen                      Launch interactive Developer Tools Notebook TUI (zen tui)
+  zen tui                  Launch interactive Developer Tools Notebook TUI
+
+Headless Package Management:
+  zen i <pkg...>           Install system package(s) or managed tool(s)
+  zen i --all              Batch install missing managed dev tools
+  zen rm <pkg...>          Uninstall package(s)
+  zen update [--all]       Refresh package index indexes (--all includes tool metadata)
+  zen upgrade --all        Upgrade system packages AND managed developer tools
+  zen upgrade system       Upgrade system package manager only
+  zen upgrade <pkg...>     Upgrade or reinstall specific package(s)
+  zen search <query>       Search for packages in repository
+
+Ecosystem & Workstation:
+  zen doctor               Audit ecosystem health (OS, symlinks, git, hooks, tools)
+  zen ali [list|query]     Directory & search for all dotfiles shortcuts and aliases
+  zen setup [modules...]   Run dotfiles modular configuration (replaces insdf)
+  zen sync                 Pull dotfiles git updates and re-apply configuration
+
+Active system manager: ${mgr:-none}
+EOF
 }
 
 # Shell-aware reload helper (supports both Bash and Zsh)

@@ -11,7 +11,7 @@ A fast, modular, zero-dependency dotfiles system for Linux, macOS, and Windows w
 3. [Command Audit Log & Smart Re-run (clog, cr)](#3-command-audit-log--smart-re-run-clog-cr)
 4. [Configuration & Editor Management (conf, e)](#4-configuration--editor-management-conf-e)
 5. [Cross-Platform Clipboard & File Opener (clip, open_target)](#5-cross-platform-clipboard--file-opener-clip-open_target)
-6. [Universal Package Manager (pkg)](#6-universal-package-manager-pkg)
+6. [Developer Tools & Package Manager (zen)](#6-zen-developer-tools--universal-package-manager)
 7. [Windows & WSL Host Management](#7-windows--wsl-host-management)
 8. [Advanced Git Workflow & Aliases](#8-advanced-git-workflow--aliases)
 9. [System Diagnostics & Networking (sysinfo, envinfo)](#9-system-diagnostics--networking-sysinfo-envinfo)
@@ -65,19 +65,21 @@ rel
 
 ### 🚀 Installer & Maintenance Shortcuts
 
-`🏷️ [Cross-Platform]` **`insdf [modules...]`**
+`🏷️ [Cross-Platform]` **`zen setup [modules...]`** *(alias: `insdf`)*
 Re-runs the dotfiles installer to update the repository, configure shell profile hooks, or install extensions:
 - **On POSIX (Bash/Zsh)**: Executes `install.sh [modules...]`
 - **On Windows (PowerShell)**: Executes `install.ps1` (or delegates to `install.sh` when specific modules are passed and `bash.exe` is present)
 
 Convenient module shortcuts:
-- `insdf tools` → Install common CLI tools (git, curl, jq, rg)
-- `insdf ssh` → Configure SSH agent and keys
-- `insdf wsl` → Configure WSL interop tools
-- `insdf mobile` → Configure Flutter, Shorebird, and Android ADB
-- `insdf docker` → Configure Docker shortcuts
-- `insdf ai` → Configure AI agent CLI helpers
-- `insdf gitconfig` → Configure global Git aliases (`include.path`)
+- `zen setup` (or `insdf`) → Launch interactive module selector
+- `zen setup zen` → Manage and provision CLI tools (git, curl, jq, rg, lazygit)
+- `zen setup ssh` → Configure SSH agent and keys
+- `zen setup wsl` → Configure WSL interop tools
+- `zen setup mobile` → Configure Flutter, Shorebird, and Android ADB
+- `zen setup docker` → Configure Docker shortcuts
+- `zen setup ai` → Configure AI agent CLI helpers
+- `zen setup git` → Configure global Git aliases (`include.path`)
+- `zen setup --all` → Install and link all modules non-interactively
 
 ---
 
@@ -294,27 +296,36 @@ open_target https://github.com    # Open URL in default browser
 
 ---
 
-## 6. Universal Package Manager
+## 6. zen: Unified Ecosystem Gateway & Package Manager
 
-`🏷️ [Cross-Platform]` **`pkg <action> [package]`**
-Standardized CLI interface abstracting underlying package managers (`apt`, `brew`, `pacman`, `dnf`, `winget`, `scoop`, `choco`):
+`🏷️ [Cross-Platform]` **`zen [command] [arguments...]`**
+Unified command gateway and workstation orchestrator managing system packages, developer tools, ecosystem diagnostics, and shortcut catalogs:
 
 ```bash
-# 1. Refresh repository indexes
-pkg update
+# 1. Interactive Developer Tools Notebook TUI (zen or zen tui)
+zen
 
-# 2. Upgrade all installed packages
-pkg upgrade
+# 2. Headless Developer Tool Provisioning
+zen i --all                 # Batch install missing managed tools (git, curl, jq, rg, lazygit)
+zen i ripgrep lazygit       # Install package(s) or tools (shorthand: ins)
+zen rm jq                   # Uninstall package(s)
 
-# 3. Install a new package
-pkg install ripgrep
-pkg install jq
+# 3. Safe Repository Updates & Upgrades
+zen update                  # Refresh package manager indexes
+zen update --all            # Refresh package indexes + track managed tool versions
+zen upgrade --all           # Upgrade system packages AND managed developer tools
+zen upgrade system          # Upgrade system package manager only
 
-# 4. Uninstall a package
-pkg remove jq
+# 4. Ecosystem Health Doctor & Diagnostics
+zen doctor                  # Audit OS, shell hooks, symlinks, git invariants, and tools
 
-# 5. Search for packages
-pkg search python
+# 5. Dotfiles Alias Directory & Search
+zen ali                     # Formatted list of all dotfiles shortcuts & aliases
+zen ali git                 # Search aliases matching keyword 'git'
+
+# 6. Modular Dotfiles Provisioning
+zen setup [modules...]      # Re-run modular dotfiles installer (replaces insdf)
+zen sync                    # Git pull dotfiles repository & re-apply configurations
 ```
 
 ---
@@ -456,7 +467,7 @@ dotfiles/
 ├── install.ps1                      # Windows Native PowerShell Installer
 ├── uninstall.sh                     # POSIX Uninstaller & Cleaner
 ├── core/                            # POSIX Shell Core (Linux, macOS, Git Bash)
-│   ├── 00-platform-lib.sh           # SSOT OS detection & shims (clip, open, pkg, rel)
+│   ├── 00-platform-lib.sh           # SSOT OS detection & shims (clip, open, zen, rel)
 │   ├── 00-shell-lib.sh              # Shell utilities (_confirm, _log_cmd, lsfunc, portss)
 │   ├── 10-base-aliases.sh           # Navigation, safe defaults, ports, and 'h' history search
 │   ├── 15-cmdlog-lib.sh             # Confirmed command audit log & rerun engine (clog, cr)
@@ -466,7 +477,7 @@ dotfiles/
 ├── powershell/                      # Windows Native PowerShell Engine
 │   ├── profile.ps1                  # Sourced by $PROFILE (PATH setup, ~/.env loader, rel)
 │   └── core/
-│       ├── 00-PlatformShims.ps1     # Platform shims ($global:IsWindowsHost, clip, open_target, pkg, sudo)
+│       ├── 00-PlatformShims.ps1     # Platform shims ($global:IsWindowsHost, clip, open_target, zen, sudo)
 │       ├── 10-BaseAliases.ps1       # Base aliases, PSReadLine history (h), env inspection (gete), venv
 │       ├── 15-CmdLog.ps1            # PowerShell Confirmed Command Audit Log (clog, cr)
 │       ├── 20-WslHost.ps1           # Host WSL management & VHDX compaction (wslcompact, gete)
@@ -478,7 +489,7 @@ dotfiles/
 │   ├── docker/module.sh             # Docker & Compose shortcuts (dps, dpsa, dcl)
 │   └── ai/module.sh                 # AI agent CLI helpers (Claude, Skills CLI, OpenClaw)
 ├── scripts/
-│   └── install-tools.sh             # Common CLI tools installer (git, curl, jq, rg via apt)
+│   └── install-tools.sh             # Developer Tools Notebook Manager TUI (zen)
 ├── enabled.d/                       # Symlinks to active modules (git-ignored)
 └── local/                           # Machine-specific overrides (git-ignored)
     ├── local.env                    # Local environment variables for POSIX

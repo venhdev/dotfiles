@@ -47,16 +47,16 @@ for arg in "$@"; do
       echo "  -f, --force  Force re-installation even if already up to date"
       echo "  -h, --help   Show this help message"
       echo
-      echo "Modules: ssh, wsl, mobile, docker, ai, gitconfig (or git), tools"
+      echo "Modules: ssh, wsl, mobile, docker, ai, gitconfig (or git), zen"
       exit 0
       ;;
-    ssh|wsl|mobile|docker|ai|git|gitconfig|tools)
+    ssh|wsl|mobile|docker|ai|git|gitconfig|zen|vdots|dtools|tools)
       OPT_MODULES+=("$arg")
       ;;
   esac
 done
 
-if [[ "${OPT_MODULES[*]}" == "tools" ]]; then
+if [[ "${OPT_MODULES[*]}" == "zen" || "${OPT_MODULES[*]}" == "vdots" || "${OPT_MODULES[*]}" == "dtools" || "${OPT_MODULES[*]}" == "tools" ]]; then
   exec bash "$DIR/scripts/install-tools.sh"
 fi
 

@@ -318,3 +318,4 @@ function insdf {
         Write-Error "Dotfiles installer not found at $global:DOTFILES_DIR"
     }
 }
+Set-Alias -Name ins -Value "zen" -ErrorAction SilentlyContinue

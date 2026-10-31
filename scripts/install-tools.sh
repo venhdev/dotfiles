@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# scripts/install-tools.sh - Dotfiles Package & Tools Notebook Manager
+# scripts/install-tools.sh - Zen Developer Tools Notebook Manager
 # ==============================================================================
 # Interactive TUI notebook to inventory, install, update, remove, and audit
 # developer CLI tools across APT and upstream GitHub releases.
@@ -65,7 +65,7 @@ for arg in "$@"; do
       echo "  -h, --help            Show this help message"
       echo
       echo "Interactive mode:"
-      echo "  Run without arguments to launch the Package & Tools Notebook TUI."
+      echo "  Run without arguments to launch the Zen Tools Notebook TUI."
       exit 0
       ;;
   esac
@@ -438,7 +438,7 @@ if (( OPT_ALL )); then
     echo
     echo "Notice: The following tools are not available in current APT repositories: ${missing_gh[*]}"
     echo "To install upstream binaries into ~/.local/bin safely with explicit review, launch the notebook:"
-    echo "  ./scripts/install-tools.sh"
+    echo "  zen (or ./scripts/install-tools.sh)"
   fi
 
   echo
@@ -599,7 +599,7 @@ _action_install() {
     done
   fi
 
-  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Zen Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -645,7 +645,7 @@ _action_update() {
     done
   fi
 
-  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Zen Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -705,7 +705,7 @@ _action_delete() {
     fi
   done
 
-  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Zen Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -787,7 +787,7 @@ _tui_enter
 
 while true; do
   _tui_clear
-  _tui_draw_header "DOTFILES PACKAGE & TOOLS NOTEBOOK" "Developer Tool Ledger & Provisioning Manager"
+  _tui_draw_header "ZEN: DEVELOPER TOOLS NOTEBOOK" "Developer Tool Ledger & Provisioning Manager"
 
   # Table Column Header (Mathematically aligned with row columns)
   printf "      %-10s %-13s %-10s %-15s %s\n" "COMMAND" "STATUS" "VERSION" "ORIGIN" "DESCRIPTION" >/dev/tty
@@ -866,4 +866,4 @@ while true; do
 done
 
 _tui_exit
-printf "\nClosed Tools Notebook.\n"
+printf "\nClosed Zen Tools Notebook.\n"
