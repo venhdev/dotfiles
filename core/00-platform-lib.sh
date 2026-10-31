@@ -167,6 +167,14 @@ open_target() {
 
 # Self-locating Dotfiles Root Resolver
 _get_dotfiles_root() {
+  if [[ -n "${ZEN_DIR:-}" && -d "$ZEN_DIR" ]]; then
+    echo "$ZEN_DIR"
+    return
+  fi
+  if [[ -n "${ZEN:-}" && -d "$ZEN" ]]; then
+    echo "$ZEN"
+    return
+  fi
   if [[ -n "${DOTFILES:-}" && -d "$DOTFILES" ]]; then
     echo "$DOTFILES"
     return
@@ -181,12 +189,17 @@ _get_dotfiles_root() {
     (cd "$self_dir/.." && pwd)
     return
   fi
-  local xdg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
-  if [[ -d "$xdg_dir" ]]; then
-    echo "$xdg_dir"
+  local xdg_zen="${XDG_CONFIG_HOME:-$HOME/.config}/zen"
+  if [[ -d "$xdg_zen" ]]; then
+    echo "$xdg_zen"
     return
   fi
-  echo "$HOME/.config/dotfiles"
+  local xdg_dotfiles="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
+  if [[ -d "$xdg_dotfiles" ]]; then
+    echo "$xdg_dotfiles"
+    return
+  fi
+  echo "$HOME/.config/zen"
 }
 
 # zen: Unified Ecosystem Gateway, Package Manager & Tools Orchestrator

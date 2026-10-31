@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
+DIR="${ZEN_DIR:-${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zen}}"
+LEGACY_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
 BASHRC="${DOTFILES_BASHRC:-$HOME/.bashrc}"
 MANIFEST="$DIR/.installed.json"
+[[ -f "$MANIFEST" ]] || MANIFEST="$LEGACY_DIR/.installed.json"
 
 can_prompt_interactively() {
   { exec 3<>/dev/tty; } 2>/dev/null || return 1
@@ -59,11 +61,11 @@ for rc in data.get("shell_hooks", []):
         with open(rc, "r") as f:
             content = f.read()
         import re
-        cleaned = re.sub(r"(?ms)\n*# Load dotfiles\n.*?unset _(cfg|f) DOTFILES\n*", "", content)
+        cleaned = re.sub(r"(?ms)\n*# Load (dotfiles|zen|Zen)\n.*?unset _(cfg|f) (DOTFILES|ZEN)\n*", "", content)
         if cleaned != content:
             with open(rc, "w") as f:
                 f.write(cleaned.strip() + "\n")
-            print(f"✔ Cleaned dotfiles hook from: {rc}")
+            print(f"✔ Cleaned shell hook from: {rc}")
 
 # 3. Unset git includes
 for git_inc in data.get("git_includes", []):
@@ -86,8 +88,8 @@ for tool_name, tool_data in data.get("tools", {}).items():
 fi
 
 # 2. Fallback clean for standard RC if not tracked in manifest
-if [[ -f "$BASHRC" ]] && grep -Fq "# Load dotfiles" "$BASHRC" 2>/dev/null; then
-  sed -i '/^# Load dotfiles$/,/^unset _\(cfg\|f\) DOTFILES$/d' "$BASHRC"
+if [[ -f "$BASHRC" ]] && grep -Eq '# Load (dotfiles|zen|Zen)' "$BASHRC" 2>/dev/null; then
+  sed -i -E '/^# Load (dotfiles|zen|Zen)$/,/^unset _(cfg|f) (DOTFILES|ZEN)$/d' "$BASHRC"
 fi
 
 GIT_CONFIG_FILE="$DIR/.gitconfig"
@@ -95,17 +97,22 @@ OLD_GIT_ALIASES_FILE="$DIR/.gitconfig_aliases"
 if command -v git >/dev/null 2>&1; then
   git config --global --unset-all include.path "$GIT_CONFIG_FILE" 2>/dev/null || true
   git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
+  git config --global --unset-all include.path "$LEGACY_DIR/.gitconfig" 2>/dev/null || true
+  git config --global --unset-all include.path "$LEGACY_DIR/.gitconfig_aliases" 2>/dev/null || true
 fi
 
 # 3. Clean runtime manifests
-rm -f "$MANIFEST" "$DIR/.installed.json.tmp" 2>/dev/null || true
+rm -f "$MANIFEST" "$DIR/.installed.json.tmp" "$LEGACY_DIR/.installed.json" 2>/dev/null || true
 
-# 4. Remove dotfiles repository if at standard target (~/.config/dotfiles)
-if [[ "$DIR" == "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles" && -d "$DIR" ]]; then
-  rm -rf "$DIR"
-fi
+# 4. Remove zen and legacy repository directories if at standard targets
+for d in "$DIR" "$LEGACY_DIR"; do
+  if [[ -d "$d" && ( "$d" == "${XDG_CONFIG_HOME:-$HOME/.config}/zen" || "$d" == "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles" ) ]]; then
+    rm -rf "$d"
+    echo "✔ Removed $d"
+  fi
+done
 
-echo "Dotfiles uninstalled successfully."
+echo "Zen uninstalled successfully."
 echo
 echo "Run below command to reload:"
 echo "exec bash"

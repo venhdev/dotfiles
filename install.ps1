@@ -5,8 +5,15 @@
 [CmdletBinding()]
 param(
     [string]$RepoUrl = "https://github.com/venhdev/zen.git",
-    [string]$TargetDir = "$env:USERPROFILE\.config\dotfiles"
+    [string]$TargetDir = "$env:USERPROFILE\.config\zen"
 )
+
+$legacyDir = "$env:USERPROFILE\.config\dotfiles"
+if ((Test-Path $legacyDir) -and (-not (Test-Path $TargetDir))) {
+    Write-Host "Migrating legacy dotfiles directory from $legacyDir to $TargetDir..." -ForegroundColor Green
+    Move-Item -Path $legacyDir -Destination $TargetDir -Force
+    git -C $TargetDir remote set-url origin $RepoUrl 2>$null
+}
 
 $ErrorActionPreference = "Stop"
 

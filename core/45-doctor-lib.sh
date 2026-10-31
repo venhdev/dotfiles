@@ -25,7 +25,8 @@ _zen_doctor() {
   else
     dotfiles_root="${DOTFILES:-${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}}"
   fi
-  local manifest_file="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.installed.json"
+  local manifest_file="${XDG_CONFIG_HOME:-$HOME/.config}/zen/.installed.json"
+  [[ -f "$manifest_file" ]] || manifest_file="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.installed.json"
   [[ -f "$manifest_file" ]] || manifest_file="$dotfiles_root/.installed.json"
 
   printf "\n${c_bold}${c_cyan}=== ZEN ECOSYSTEM HEALTH DOCTOR ===${c_reset}\n"

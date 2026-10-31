@@ -4,7 +4,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$TargetDir = "$env:USERPROFILE\.config\dotfiles",
+    [string]$TargetDir = "$env:USERPROFILE\.config\zen",
     [switch]$Force
 )
 

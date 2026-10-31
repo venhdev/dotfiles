@@ -2,7 +2,8 @@
 set -e
 
 REPO="https://github.com/venhdev/zen.git"
-DIR="${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}"
+DIR="${ZEN_DIR:-${DOTFILES_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zen}}"
+LEGACY_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
 
 # Load SSOT platform detection library if present, or provide minimal bootstrap fallbacks
 if [[ -f "$DIR/core/00-platform-lib.sh" ]]; then
@@ -25,11 +26,12 @@ else
   RC_FILE="$HOME/.bashrc"
 fi
 BASHRC="$RC_FILE"
-MARKER="# Load dotfiles"
+MARKER="# Load Zen"
 
 # Parse CLI arguments
 OPT_ALL=0
 OPT_FORCE=0
+OPT_CLEAN=0
 OPT_MODULES=()
 for arg in "$@"; do
   case "$arg" in
@@ -39,12 +41,16 @@ for arg in "$@"; do
     -f|--force)
       OPT_FORCE=1
       ;;
+    -c|--clean)
+      OPT_CLEAN=1
+      ;;
     -h|--help)
       echo "Usage: ./install.sh [OPTIONS] [MODULE...]"
       echo
       echo "Options:"
       echo "  -a, --all    Install all modules with defaults (non-interactive)"
       echo "  -f, --force  Force re-installation even if already up to date"
+      echo "  -c, --clean  Wipe previous installation directory before installing"
       echo "  -h, --help   Show this help message"
       echo
       echo "Modules: ssh, wsl, mobile, docker, ai, gitconfig (or git), zen"
@@ -305,6 +311,29 @@ _probe_windows_tools() {
     fi
   done
 }
+
+# 0. Clean or Migrate from legacy ~/.config/dotfiles to ~/.config/zen
+if (( OPT_CLEAN )); then
+  if [[ -d "$DIR" ]]; then
+    echo "==> Cleaning previous installation directory at $DIR..."
+    rm -rf "$DIR"
+  fi
+  if [[ -d "$LEGACY_DIR" ]]; then
+    echo "==> Cleaning legacy dotfiles directory at $LEGACY_DIR..."
+    rm -rf "$LEGACY_DIR"
+  fi
+elif [[ -d "$LEGACY_DIR" && "$DIR" != "$LEGACY_DIR" ]]; then
+  echo "==> Migrating legacy installation from $LEGACY_DIR to $DIR..."
+  if [[ ! -d "$DIR" ]]; then
+    mv "$LEGACY_DIR" "$DIR"
+    git -C "$DIR" remote set-url origin "$REPO" 2>/dev/null || true
+  else
+    [[ -f "$LEGACY_DIR/.installed.json" && ! -f "$DIR/.installed.json" ]] && cp "$LEGACY_DIR/.installed.json" "$DIR/"
+    [[ -f "$LEGACY_DIR/local/local.env" && ! -f "$DIR/local/local.env" ]] && cp "$LEGACY_DIR/local/local.env" "$DIR/local/"
+    rm -rf "$LEGACY_DIR"
+  fi
+  echo "✔ Successfully migrated to $DIR and cleaned up $LEGACY_DIR"
+fi
 
 # 1. Update or clone repository
 if [[ -n "${DOTFILES_REEXEC:-}" ]]; then
@@ -717,30 +746,34 @@ rm -f "$DIR/enabled.d"/50-*.sh
 # 5. Update shell configuration ($RC_FILE)
 touch "$RC_FILE"
 
-if grep -Fq "$MARKER" "$RC_FILE"; then
-  # Cross-platform in-place deletion compatible with both GNU sed and BSD sed
-  sed '/^# Load dotfiles$/,/^unset _\(cfg\|f\) DOTFILES$/d' "$RC_FILE" > "$RC_FILE.tmp" && mv "$RC_FILE.tmp" "$RC_FILE"
+# Clean legacy dotfiles or zen hooks
+if grep -Eq '# Load (dotfiles|zen|Zen)' "$RC_FILE" 2>/dev/null; then
+  sed -E '/^# Load (dotfiles|zen|Zen)$/,/^unset _(cfg|f) (DOTFILES|ZEN)$/d' "$RC_FILE" > "$RC_FILE.tmp" && mv "$RC_FILE.tmp" "$RC_FILE"
 fi
 
-cat >>"$RC_FILE" <<'EOF'
+cat >>"$RC_FILE" <<EOF
 
-# Load dotfiles
-DOTFILES="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles"
+# Load Zen
+ZEN="$DIR"
 
-[ -r "$DOTFILES/local/local.env" ] && . "$DOTFILES/local/local.env"
+[ -r "\$ZEN/local/local.env" ] && . "\$ZEN/local/local.env"
 
-for _f in "$DOTFILES"/core/*.sh "$DOTFILES"/enabled.d/*.sh "$HOME/.env"; do
-  [ -r "$_f" ] && . "$_f"
+for _f in "\$ZEN"/core/*.sh "\$ZEN"/enabled.d/*.sh "\$HOME/.env"; do
+  [ -r "\$_f" ] && . "\$_f"
 done
 
-unset _f DOTFILES
+unset _f ZEN
 EOF
 
 # 6. Global Git Configuration
-GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
+GIT_CONFIG_FILE="$DIR/.gitconfig"
 OLD_GIT_ALIASES_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig_aliases"
+OLD_GIT_CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/.gitconfig"
 if command -v git >/dev/null 2>&1; then
   git config --global --unset-all include.path "$OLD_GIT_ALIASES_FILE" 2>/dev/null || true
+  if [[ "$DIR" != "${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles" ]]; then
+    git config --global --unset-all include.path "$OLD_GIT_CONFIG_FILE" 2>/dev/null || true
+  fi
   if (( selected[6] )); then
     if ! git config --global --get-all include.path 2>/dev/null | grep -Fxq "$GIT_CONFIG_FILE"; then
       git config --global --add include.path "$GIT_CONFIG_FILE"
@@ -757,13 +790,15 @@ if is_msys; then
     ps_prof="$ps_doc/Microsoft.PowerShell_profile.ps1"
     mkdir -p "$ps_doc"
     touch "$ps_prof"
-    if ! grep -Fq "# Load dotfiles" "$ps_prof" 2>/dev/null; then
+    if ! grep -Eq '# Load (dotfiles|zen|Zen)' "$ps_prof" 2>/dev/null; then
       cat >>"$ps_prof" <<'PS_EOF'
 
-# Load dotfiles
-$global:DOTFILES_DIR = "$env:USERPROFILE\.config\dotfiles"
-$dotfilesLoader = "$global:DOTFILES_DIR\powershell\profile.ps1"
-if (Test-Path $dotfilesLoader) { . $dotfilesLoader }
+# Load Zen
+$global:ZEN_DIR = "$env:USERPROFILE\.config\zen"
+$global:DOTFILES_DIR = $global:ZEN_DIR
+$zenLoader = "$global:ZEN_DIR\powershell\profile.ps1"
+if (Test-Path $zenLoader) { . $zenLoader }
+# End Zen
 PS_EOF
       MANIFEST_SHELL_HOOKS+=("$ps_prof")
     fi
@@ -853,7 +888,7 @@ if (( selected[7] )); then
 fi
 
 echo
-echo "Dotfiles $ACTION successfully: $DIR"
+echo "Zen $ACTION successfully: $DIR"
 echo
 echo "Run below command to reload:"
 echo "source ~/.bashrc"
