@@ -160,8 +160,16 @@ unset _dotfiles_root _chrome_wrapper
 
 # --- Flutter helpers ---
 
+_flutter_runner() {
+  if command -v fvm &>/dev/null && [[ -f .fvmrc || -d .fvm ]]; then
+    echo "fvm flutter"
+  else
+    echo "flutter"
+  fi
+}
+
 _flutter_devices() {
-  fvm flutter devices --machine |
+  $(_flutter_runner) devices --machine |
     jq -r '.[] | [.id, .name] | @tsv'
 }
 
@@ -491,7 +499,7 @@ flr() {
 
   _flutter_args args || return
 
-  cmd=(fvm flutter run -d "$device" "${args[@]}")
+  cmd=($(_flutter_runner) run -d "$device" "${args[@]}")
   _run_confirm "${cmd[@]}"
 }
 
@@ -521,7 +529,7 @@ flb() {
   _flutter_icon_args args || return
   _flutter_args args "$platform" || return
 
-  cmd=(fvm flutter build "$platform" "${args[@]}")
+  cmd=($(_flutter_runner) build "$platform" "${args[@]}")
   _run_confirm "${cmd[@]}"
 }
 

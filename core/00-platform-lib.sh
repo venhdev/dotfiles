@@ -2,10 +2,26 @@
 
 # Detect Operating System Family
 _detect_os() {
-  if [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "cygwin"* ]]; then
-    echo "msys"
-    return
-  fi
+  case "$OSTYPE" in
+    darwin*)
+      echo "darwin"
+      return
+      ;;
+    msys*|cygwin*)
+      echo "msys"
+      return
+      ;;
+    linux*)
+      if [[ -n "${WSL_DISTRO_NAME:-}" ]] || [[ -f /proc/version && "$(< /proc/version)" == *[Mm]icrosoft* ]]; then
+        echo "wsl"
+      elif [[ "$(uname -r 2>/dev/null)" == *[Mm]icrosoft* ]]; then
+        echo "wsl"
+      else
+        echo "linux"
+      fi
+      return
+      ;;
+  esac
 
   local uname_out
   uname_out="$(uname -s 2>/dev/null || echo "Unknown")"
@@ -18,7 +34,7 @@ _detect_os() {
       echo "msys"
       ;;
     Linux*)
-      if [[ -n "${WSL_DISTRO_NAME:-}" ]] || [[ "$(uname -r 2>/dev/null)" == *[Mm]icrosoft* ]] || [[ -f /proc/version && "$(< /proc/version)" == *[Mm]icrosoft* ]]; then
+      if [[ -n "${WSL_DISTRO_NAME:-}" ]] || [[ -f /proc/version && "$(< /proc/version)" == *[Mm]icrosoft* ]] || [[ "$(uname -r 2>/dev/null)" == *[Mm]icrosoft* ]]; then
         echo "wsl"
       else
         echo "linux"
@@ -30,12 +46,22 @@ _detect_os() {
   esac
 }
 
-# Detect Linux Distribution Family (from /etc/os-release)
+# Detect Linux Distribution Family (from /etc/os-release without external subshell forks)
 _detect_distro() {
   if [[ -f /etc/os-release ]]; then
-    local id="" id_like=""
-    id="$(grep -E '^ID=' /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '"'"'" | tr '[:upper:]' '[:lower:]')"
-    id_like="$(grep -E '^ID_LIKE=' /etc/os-release 2>/dev/null | cut -d'=' -f2 | tr -d '"'"'" | tr '[:upper:]' '[:lower:]')"
+    typeset -l id="" id_like=""
+    local k v
+    while IFS='=' read -r k v || [[ -n "$k" ]]; do
+      v="${v%\"}"
+      v="${v#\"}"
+      v="${v%\'}"
+      v="${v#\'}"
+      case "$k" in
+        ID) id="$v" ;;
+        ID_LIKE) id_like="$v" ;;
+      esac
+      [[ -n "$id" && -n "$id_like" ]] && break
+    done < /etc/os-release
     echo "${id:-${id_like:-linux}}"
   else
     echo "unknown"

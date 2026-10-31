@@ -123,21 +123,7 @@ _cmdlog_clip() {
   }
 
   IFS=$'\t' read -r _ _ _ _ cmd <<< "$line"
-
-  if command -v clip.exe &>/dev/null; then
-    printf '%s' "$cmd" | clip.exe
-  elif command -v wl-copy &>/dev/null; then
-    printf '%s' "$cmd" | wl-copy
-  elif command -v xclip &>/dev/null; then
-    printf '%s' "$cmd" | xclip -selection clipboard
-  elif command -v xsel &>/dev/null; then
-    printf '%s' "$cmd" | xsel --clipboard --input
-  else
-    echo "No clipboard utility found (clip.exe, wl-copy, xclip, xsel)" >&2
-    echo "Command: $cmd"
-    return 1
-  fi
-  printf 'Copied to clipboard: %s\n' "$cmd"
+  _cmdlog_copy_to_clip "$cmd"
 }
 
 _cmdlog_list() {
@@ -259,7 +245,9 @@ _cmdlog_list() {
 
 _cmdlog_copy_to_clip() {
   local to_copy="$1"
-  if command -v clip.exe >/dev/null 2>&1; then
+  if declare -F clip >/dev/null 2>&1; then
+    printf '%s' "$to_copy" | clip
+  elif command -v clip.exe >/dev/null 2>&1; then
     printf '%s' "$to_copy" | clip.exe
   elif command -v wl-copy >/dev/null 2>&1; then
     printf '%s' "$to_copy" | wl-copy
@@ -267,8 +255,6 @@ _cmdlog_copy_to_clip() {
     printf '%s' "$to_copy" | pbcopy
   elif command -v xclip >/dev/null 2>&1; then
     printf '%s' "$to_copy" | xclip -selection clipboard
-  elif command -v clip >/dev/null 2>&1; then
-    printf '%s' "$to_copy" | clip
   fi
   # Emit OSC 52 clipboard escape sequence for terminal / SSH / tmux integration
   if command -v base64 >/dev/null 2>&1; then
@@ -277,6 +263,31 @@ _cmdlog_copy_to_clip() {
     printf '\033]52;c;%s\a' "$b64" >/dev/tty 2>/dev/null || true
   fi
   echo "✓ Copied to clipboard: $to_copy"
+}
+
+_cmdlog_tui_cleanup() {
+  tput cnorm >/dev/tty 2>/dev/null || printf "\033[?25h" >/dev/tty
+}
+
+_cmdlog_tui_apply_filter() {
+  local query="${1,,}"
+  local -n _raw_list="$2"
+  local -n _out_indices="$3"
+  local -n _cursor_ref="$4"
+  local total=${#_raw_list[@]}
+  local i
+  _out_indices=()
+  for ((i=0; i<total; i++)); do
+    local r_entry="${_raw_list[i]}"
+    local e_cmd="${r_entry#*$'\t'*$'\t'*$'\t'*$'\t'}"
+    local item_lower="${e_cmd,,}"
+    if [[ -z "$query" || "$item_lower" == *"$query"* ]]; then
+      _out_indices+=("$i")
+    fi
+  done
+  if ((_cursor_ref >= ${#_out_indices[@]})); then
+    _cursor_ref=$(( ${#_out_indices[@]} > 0 ? ${#_out_indices[@]} - 1 : 0 ))
+  fi
 }
 
 _cmdlog_tui_select() {
@@ -294,22 +305,6 @@ _cmdlog_tui_select() {
 
   for ((i=0; i<total; i++)); do filtered_indices+=("$i"); done
 
-  _update_filter() {
-    filtered_indices=()
-    local q="${filter_query,,}"
-    for ((i=0; i<total; i++)); do
-      local r_entry="${raw_entries[i]}"
-      local e_cmd="${r_entry#*$'\t'*$'\t'*$'\t'*$'\t'}"
-      local item_lower="${e_cmd,,}"
-      if [[ -z "$q" || "$item_lower" == *"$q"* ]]; then
-        filtered_indices+=("$i")
-      fi
-    done
-    if ((cursor >= ${#filtered_indices[@]})); then
-      cursor=$(( ${#filtered_indices[@]} > 0 ? ${#filtered_indices[@]} - 1 : 0 ))
-    fi
-  }
-
   local max_cols
   max_cols=$(tput cols 2>/dev/null || echo "${COLUMNS:-80}")
   ((max_cols <= 20)) && max_cols=80
@@ -317,10 +312,7 @@ _cmdlog_tui_select() {
   # Hide cursor on TTY
   tput civis >/dev/tty 2>/dev/null || printf "\033[?25l" >/dev/tty
 
-  _tui_cleanup() {
-    tput cnorm >/dev/tty 2>/dev/null || printf "\033[?25h" >/dev/tty
-  }
-  trap _tui_cleanup RETURN INT TERM
+  trap _cmdlog_tui_cleanup RETURN INT TERM
 
   while true; do
     printf "\033[H\033[2J" >/dev/tty
@@ -399,12 +391,12 @@ _cmdlog_tui_select() {
       elif [[ $key == $'\x7f' || $key == $'\b' ]]; then
         if [[ -n "$filter_query" ]]; then
           filter_query="${filter_query:0:-1}"
-          _update_filter
+          _cmdlog_tui_apply_filter "$filter_query" raw_entries filtered_indices cursor
         fi
       else
         if [[ $key =~ [[:print:]] ]]; then
           filter_query+="$key"
-          _update_filter
+          _cmdlog_tui_apply_filter "$filter_query" raw_entries filtered_indices cursor
         fi
       fi
       continue
@@ -419,7 +411,7 @@ _cmdlog_tui_select() {
         "")
           if [[ -n "$filter_query" ]]; then
             filter_query=""
-            _update_filter
+            _cmdlog_tui_apply_filter "$filter_query" raw_entries filtered_indices cursor
           else
             TUI_ACTION="CANCEL"
             return 0
@@ -449,6 +441,228 @@ _cmdlog_tui_select() {
       fi
     fi
   done
+}
+
+_cmdlog_collect_entries() {
+  local file="$1"
+  local cwd_only="$2"
+  local query="$3"
+  local limit="$4"
+  local -n _out_entries="$5"
+
+  local seen_cmds=$'\n'
+  local line ts status dur cwd cmd
+  local current_pwd="${PWD:-$HOME}"
+
+  _out_entries=()
+  while IFS= read -r line || [[ -n $line ]]; do
+    [[ -n $line ]] || continue
+    IFS=$'\t' read -r ts status dur cwd cmd <<< "$line"
+
+    if ((cwd_only)) && [[ $cwd != "$current_pwd" ]]; then
+      continue
+    fi
+
+    if [[ -n $query ]]; then
+      local lower_cmd="${cmd,,}"
+      local lower_query="${query,,}"
+      if [[ $lower_cmd != *"$lower_query"* && ${cwd,,} != *"$lower_query"* ]]; then
+        continue
+      fi
+    fi
+
+    # Deduplication: keep only the latest occurrence
+    if [[ $seen_cmds == *$'\n'"$cmd"$'\n'* ]]; then
+      continue
+    fi
+    seen_cmds+="$cmd"$'\n'
+
+    _out_entries+=("$line")
+    ((${#_out_entries[@]} >= limit)) && break
+  done < <(_cmdlog_parse_records "$file")
+}
+
+_cmdlog_fzf_select() {
+  local query="$1"
+  local -n _fzf_entries="$2"
+  local -n _chosen_out="$3"
+
+  local fzf_input="" i
+  for i in "${!_fzf_entries[@]}"; do
+    local ts status dur cwd cmd
+    IFS=$'\t' read -r ts status dur cwd cmd <<< "${_fzf_entries[i]}"
+    local short_cwd="$(_cmdlog_shorten_path "$cwd")"
+    local st_color=""
+    case "$status" in
+      0)   st_color=$'\033[1;32m[OK]\033[0m' ;;
+      "-") st_color=$'\033[0;90m[-]\033[0m' ;;
+      *)   st_color=$'\033[1;31m[ERR:'"$status"']\033[0m' ;;
+    esac
+    fzf_input+="$((i + 1))"$'\t'"$ts"$'\t'"$st_color"$'\t'"[$short_cwd]"$'\t'"$cmd"$'\n'
+  done
+
+  local fzf_res
+  fzf_res=$(printf '%s' "$fzf_input" | fzf \
+    --ansi \
+    --height 50% \
+    --reverse \
+    --delimiter=$'\t' \
+    --with-nth 1,2,3,4,5 \
+    --preview 'echo -e "\033[1;36mCommand:\033[0m\n{5}"' \
+    --preview-window=down:3:wrap \
+    --prompt="Rerun > " \
+    --header="[Enter] Run | [Ctrl-Y/Alt-C] Copy | [Esc] Cancel" \
+    --expect=enter,ctrl-y,alt-c \
+    --query="$query" || true)
+
+  local fzf_key chosen_line
+  fzf_key=$(echo "$fzf_res" | head -n 1)
+  chosen_line=$(echo "$fzf_res" | sed 1d)
+
+  if [[ -z "$chosen_line" ]]; then
+    echo "Cancelled"
+    return 1
+  fi
+
+  local chosen_num
+  chosen_num=$(echo "$chosen_line" | cut -f1)
+  local selected_entry="${_fzf_entries[chosen_num - 1]}"
+  local s_ts s_st s_dur s_cwd s_cmd
+  IFS=$'\t' read -r s_ts s_st s_dur s_cwd s_cmd <<< "$selected_entry"
+
+  if [[ "$fzf_key" == "ctrl-y" || "$fzf_key" == "alt-c" ]]; then
+    _cmdlog_copy_to_clip "$s_cmd"
+    return 2
+  fi
+
+  _chosen_out="$chosen_num"
+  return 0
+}
+
+_cmdlog_fallback_select() {
+  local title="$1"
+  local -n _fb_entries="$2"
+  local -n _chosen_out="$3"
+  local total=${#_fb_entries[@]}
+
+  printf '\033[1;34m=== %s ===\033[0m\n' "$title"
+  local i
+  for i in "${!_fb_entries[@]}"; do
+    local ts status dur cwd cmd
+    IFS=$'\t' read -r ts status dur cwd cmd <<< "${_fb_entries[i]}"
+    local st_str=""
+    case "$status" in
+      0)   st_str="\033[1;32m[OK]\033[0m" ;;
+      "-") st_str="\033[0;90m[-]\033[0m" ;;
+      *)   st_str="\033[1;31m[ERR:$status]\033[0m" ;;
+    esac
+    local cwd_str=""
+    if [[ $cwd != "-" && -n $cwd ]]; then
+      cwd_str=" \033[0;33m[$(_cmdlog_shorten_path "$cwd")]\033[0m"
+    fi
+    if ((i < total - 1)); then
+      printf ' \033[1;36m[%d]\033[0m \033[0;90m%s\033[0m %b%b\n%s\n\n' \
+        "$((i + 1))" "$ts" "$st_str" "$cwd_str" "$cmd"
+    else
+      printf ' \033[1;36m[%d]\033[0m \033[0;90m%s\033[0m %b%b\n%s\n' \
+        "$((i + 1))" "$ts" "$st_str" "$cwd_str" "$cmd"
+    fi
+  done
+
+  local choice
+  if ! read -rp "Select [1-$total, default 1, c <num> to copy, q to cancel]: " choice; then
+    echo "Cancelled"
+    return 1
+  fi
+
+  case "$choice" in
+    q|Q|0)
+      echo "Cancelled"
+      return 1
+      ;;
+    c*|clip*|copy*)
+      local copy_idx="${choice#* }"
+      [[ "$copy_idx" =~ ^[0-9]+$ ]] || copy_idx=1
+      if ((copy_idx >= 1 && copy_idx <= total)); then
+        local to_copy="${_fb_entries[copy_idx - 1]}"
+        local c_ts c_st c_dur c_cwd c_cmd
+        IFS=$'\t' read -r c_ts c_st c_dur c_cwd c_cmd <<< "$to_copy"
+        _cmdlog_copy_to_clip "$c_cmd"
+        return 2
+      else
+        echo "Invalid copy index: $copy_idx (must be 1-$total)" >&2
+        return 1
+      fi
+      ;;
+    "")
+      _chosen_out=1
+      ;;
+    *)
+      _chosen_out="$choice"
+      ;;
+  esac
+  return 0
+}
+
+_cmdlog_dispatch_execution() {
+  local cmd="$1"
+  local orig_cwd="$2"
+  local current_pwd="$3"
+  local interactive_choice="$4"
+  local edit_mode="$5"
+
+  # CWD difference check
+  if [[ $orig_cwd != "-" && -n $orig_cwd && $orig_cwd != "$current_pwd" && -d $orig_cwd ]]; then
+    printf '\033[1;33m⚠️  CWD Notice:\033[0m Command originally ran in:\n' >&2
+    printf '   Original: %s\n' "$orig_cwd" >&2
+    printf '   Current:  %s\n' "$current_pwd" >&2
+    local dir_choice
+    read -rp "Run in current dir [y], cd to original dir and run [c], cancel [N]? " dir_choice
+    case "$dir_choice" in
+      c|C)
+        echo "Navigating to: $orig_cwd"
+        cd "$orig_cwd" || return 1
+        ;;
+      y|Y)
+        ;;
+      *)
+        echo "Cancelled"
+        return 0
+        ;;
+    esac
+  fi
+
+  local cmd_to_run="$cmd"
+
+  if ((edit_mode)); then
+    read -e -i "$cmd_to_run" -p "Edit command: " edited_cmd
+    [[ -n $edited_cmd ]] || { echo "Cancelled"; return 0; }
+    cmd_to_run="$edited_cmd"
+  fi
+
+  if ((interactive_choice)); then
+    printf '\n\033[1;36m▶ Run:\033[0m %s\n' "$cmd_to_run"
+    if ! _confirm "Execute command? [Y/n] "; then
+      echo "Cancelled"
+      return 0
+    fi
+  else
+    printf '\n▶ %s\n' "$cmd_to_run"
+  fi
+  history -s "$cmd_to_run" 2>/dev/null || true
+
+  local start_time=$SECONDS
+  local run_cwd="${PWD:-$HOME}"
+  local rc=0
+
+  eval "$cmd_to_run" || rc=$?
+
+  local duration=$((SECONDS - start_time))
+  if declare -F _log_cmd_record &>/dev/null; then
+    _log_cmd_record "$rc" "$duration" "$run_cwd" "$cmd_to_run"
+  fi
+
+  return $rc
 }
 
 _cmdlog_run() {
@@ -494,35 +708,7 @@ _cmdlog_run() {
   done
 
   local entries=()
-  local seen_cmds=$'\n'
-  local line ts status dur cwd cmd
-  local current_pwd="${PWD:-$HOME}"
-
-  while IFS= read -r line || [[ -n $line ]]; do
-    [[ -n $line ]] || continue
-    IFS=$'\t' read -r ts status dur cwd cmd <<< "$line"
-
-    if ((cwd_only)) && [[ $cwd != "$current_pwd" ]]; then
-      continue
-    fi
-
-    if [[ -n $query ]]; then
-      local lower_cmd="${cmd,,}"
-      local lower_query="${query,,}"
-      if [[ $lower_cmd != *"$lower_query"* && ${cwd,,} != *"$lower_query"* ]]; then
-        continue
-      fi
-    fi
-
-    # Deduplication: keep only the latest occurrence
-    if [[ $seen_cmds == *$'\n'"$cmd"$'\n'* ]]; then
-      continue
-    fi
-    seen_cmds+="$cmd"$'\n'
-
-    entries+=("$line")
-    ((${#entries[@]} >= limit)) && break
-  done < <(_cmdlog_parse_records "$file")
+  _cmdlog_collect_entries "$file" "$cwd_only" "$query" "$limit" entries
 
   local total=${#entries[@]}
   if ((total == 0)); then
@@ -533,66 +719,17 @@ _cmdlog_run() {
   local chosen_idx="$target_idx"
   local interactive_choice=0
 
-  # If not passed via CLI index, ask interactively
   if [[ -z $chosen_idx ]]; then
     local title="Rerun Confirmed Commands (latest $total)"
     [[ -n $query ]] && title="Rerun Commands matching '$query' (latest $total)"
 
     if [[ -t 0 && -t 1 ]] && [[ -e /dev/tty ]]; then
-      # Optional: fzf mode if explicitly requested (-f or DOTFILES_CR_FZF=1)
       if ((use_fzf)) && command -v fzf >/dev/null 2>&1; then
-        local fzf_input=""
-        local i
-        for i in "${!entries[@]}"; do
-          IFS=$'\t' read -r ts status dur cwd cmd <<< "${entries[i]}"
-          local short_cwd="$(_cmdlog_shorten_path "$cwd")"
-          local st_color=""
-          case "$status" in
-            0)   st_color=$'\033[1;32m[OK]\033[0m' ;;
-            "-") st_color=$'\033[0;90m[-]\033[0m' ;;
-            *)   st_color=$'\033[1;31m[ERR:'"$status"']\033[0m' ;;
-          esac
-          fzf_input+="$((i + 1))"$'\t'"$ts"$'\t'"$st_color"$'\t'"[$short_cwd]"$'\t'"$cmd"$'\n'
-        done
-
-        local fzf_res
-        fzf_res=$(printf '%s' "$fzf_input" | fzf \
-          --ansi \
-          --height 50% \
-          --reverse \
-          --delimiter=$'\t' \
-          --with-nth 1,2,3,4,5 \
-          --preview 'echo -e "\033[1;36mCommand:\033[0m\n{5}"' \
-          --preview-window=down:3:wrap \
-          --prompt="Rerun > " \
-          --header="[Enter] Run | [Ctrl-Y/Alt-C] Copy | [Esc] Cancel" \
-          --expect=enter,ctrl-y,alt-c \
-          --query="$query" || true)
-
-        local fzf_key chosen_line
-        fzf_key=$(echo "$fzf_res" | head -n 1)
-        chosen_line=$(echo "$fzf_res" | sed 1d)
-
-        if [[ -z "$chosen_line" ]]; then
-          echo "Cancelled"
-          return 0
-        fi
-
-        local chosen_num
-        chosen_num=$(echo "$chosen_line" | cut -f1)
-        local selected_entry="${entries[chosen_num - 1]}"
-        local s_ts s_st s_dur s_cwd s_cmd
-        IFS=$'\t' read -r s_ts s_st s_dur s_cwd s_cmd <<< "$selected_entry"
-
-        if [[ "$fzf_key" == "ctrl-y" || "$fzf_key" == "alt-c" ]]; then
-          _cmdlog_copy_to_clip "$s_cmd"
-          return 0
-        fi
-
-        chosen_idx="$chosen_num"
+        _cmdlog_fzf_select "$query" entries chosen_idx
+        local fzf_status=$?
+        if ((fzf_status == 1 || fzf_status == 2)); then return 0; fi
         interactive_choice=1
       else
-        # Default Tier 1: Pure Bash Native TUI (Option 2: 2-line layout, single key actions)
         TUI_ACTION=""
         TUI_CHOSEN_IDX=""
         _cmdlog_tui_select "$title" "${entries[@]}"
@@ -615,62 +752,9 @@ _cmdlog_run() {
         esac
       fi
     else
-      # Tier 3: Non-interactive pipe or dumb terminal fallback (numbered menu)
-      printf '\033[1;34m=== %s ===\033[0m\n' "$title"
-      local i
-      for i in "${!entries[@]}"; do
-        IFS=$'\t' read -r ts status dur cwd cmd <<< "${entries[i]}"
-        local st_str=""
-        case "$status" in
-          0)   st_str="\033[1;32m[OK]\033[0m" ;;
-          "-") st_str="\033[0;90m[-]\033[0m" ;;
-          *)   st_str="\033[1;31m[ERR:$status]\033[0m" ;;
-        esac
-        local cwd_str=""
-        if [[ $cwd != "-" && -n $cwd ]]; then
-          cwd_str=" \033[0;33m[$(_cmdlog_shorten_path "$cwd")]\033[0m"
-        fi
-        if ((i < total - 1)); then
-          printf ' \033[1;36m[%d]\033[0m \033[0;90m%s\033[0m %b%b\n%s\n\n' \
-            "$((i + 1))" "$ts" "$st_str" "$cwd_str" "$cmd"
-        else
-          printf ' \033[1;36m[%d]\033[0m \033[0;90m%s\033[0m %b%b\n%s\n' \
-            "$((i + 1))" "$ts" "$st_str" "$cwd_str" "$cmd"
-        fi
-      done
-
-      local choice
-      if ! read -rp "Select [1-$total, default 1, c <num> to copy, q to cancel]: " choice; then
-        echo "Cancelled"
-        return 0
-      fi
-
-      case "$choice" in
-        q|Q|0)
-          echo "Cancelled"
-          return 0
-          ;;
-        c*|clip*|copy*)
-          local copy_idx="${choice#* }"
-          [[ "$copy_idx" =~ ^[0-9]+$ ]] || copy_idx=1
-          if ((copy_idx >= 1 && copy_idx <= total)); then
-            local to_copy="${entries[copy_idx - 1]}"
-            local c_ts c_st c_dur c_cwd c_cmd
-            IFS=$'\t' read -r c_ts c_st c_dur c_cwd c_cmd <<< "$to_copy"
-            _cmdlog_copy_to_clip "$c_cmd"
-            return 0
-          else
-            echo "Invalid copy index: $copy_idx (must be 1-$total)" >&2
-            return 1
-          fi
-          ;;
-        "")
-          chosen_idx=1
-          ;;
-        *)
-          chosen_idx="$choice"
-          ;;
-      esac
+      _cmdlog_fallback_select "$title" entries chosen_idx
+      local fb_status=$?
+      if ((fb_status != 0)); then return 0; fi
     fi
   fi
 
@@ -680,61 +764,10 @@ _cmdlog_run() {
   fi
 
   local selected_entry="${entries[chosen_idx - 1]}"
+  local ts status dur cwd cmd
   IFS=$'\t' read -r ts status dur cwd cmd <<< "$selected_entry"
 
-  # CWD difference check
-  if [[ $cwd != "-" && -n $cwd && $cwd != "$current_pwd" && -d $cwd ]]; then
-    printf '\033[1;33m⚠️  CWD Notice:\033[0m Command originally ran in:\n' >&2
-    printf '   Original: %s\n' "$cwd" >&2
-    printf '   Current:  %s\n' "$current_pwd" >&2
-    local dir_choice
-    read -rp "Run in current dir [y], cd to original dir and run [c], cancel [N]? " dir_choice
-    case "$dir_choice" in
-      c|C)
-        echo "Navigating to: $cwd"
-        cd "$cwd" || return 1
-        ;;
-      y|Y)
-        # proceed in current dir
-        ;;
-      *)
-        echo "Cancelled"
-        return 0
-        ;;
-    esac
-  fi
-
-  local cmd_to_run="$cmd"
-
-  if ((edit_mode)); then
-    read -e -i "$cmd_to_run" -p "Edit command: " edited_cmd
-    [[ -n $edited_cmd ]] || { echo "Cancelled"; return 0; }
-    cmd_to_run="$edited_cmd"
-  fi
-
-  if ((interactive_choice)); then
-    printf '\n\033[1;36m▶ Run:\033[0m %s\n' "$cmd_to_run"
-    if ! _confirm "Execute command? [Y/n] "; then
-      echo "Cancelled"
-      return 0
-    fi
-  else
-    printf '\n▶ %s\n' "$cmd_to_run"
-  fi
-  history -s "$cmd_to_run" 2>/dev/null || true
-
-  local start_time=$SECONDS
-  local run_cwd="${PWD:-$HOME}"
-  local rc=0
-
-  eval "$cmd_to_run" || rc=$?
-
-  local duration=$((SECONDS - start_time))
-  if declare -F _log_cmd_record &>/dev/null; then
-    _log_cmd_record "$rc" "$duration" "$run_cwd" "$cmd_to_run"
-  fi
-
-  return $rc
+  _cmdlog_dispatch_execution "$cmd" "$cwd" "${PWD:-$HOME}" "$interactive_choice" "$edit_mode"
 }
 
 cmdlog() {
