@@ -14,14 +14,26 @@ function wslcompact {
     }
 
     if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
-        $status = wsl.exe -l -v 2>$null
-        if ($status -match '\bRunning\b') {
+        $rawStatus = wsl.exe -l -v 2>$null
+        $cleanStatus = ($rawStatus -join "`n") -replace "`0", ""
+        if ($cleanStatus -match '(?i)Running') {
             Write-Warning "WSL instances are currently running."
             $ans = Read-Host "Run 'wsl --shutdown' now? [Y/n]"
             if ($ans -eq '' -or $ans -match '^[Yy]$') {
                 Write-Host "Shutting down WSL instances..." -ForegroundColor Yellow
                 wsl.exe --shutdown
-                Start-Sleep -Seconds 2
+                $stopped = $false
+                for ($i = 0; $i -lt 10; $i++) {
+                    Start-Sleep -Seconds 1
+                    $check = ((wsl.exe -l -v 2>$null) -join "`n") -replace "`0", ""
+                    if ($check -notmatch '(?i)Running') {
+                        $stopped = $true
+                        break
+                    }
+                }
+                if (-not $stopped) {
+                    Write-Warning "WSL is still running or was automatically restarted by another application (e.g. VS Code, Cursor, or background service)."
+                }
             } else {
                 Write-Warning "Please shut down WSL before compacting disk."
                 return
@@ -118,7 +130,11 @@ function wslcompact {
             }
         }
     } catch {
-        Write-Error "Compaction failed: $($_.Exception.Message)"
+        if ($_.Exception.Message -like "*0x80070020*" -or $_.Exception.Message -like "*used by another process*") {
+            Write-Error "Compaction failed: VHDX file is locked by a running process (0x80070020).`nPlease close any applications connected to WSL (such as VS Code, Cursor, or terminal windows), run 'wsl --shutdown', and try again."
+        } else {
+            Write-Error "Compaction failed: $($_.Exception.Message)"
+        }
         return
     }
 
