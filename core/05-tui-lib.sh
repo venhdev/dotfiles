@@ -115,23 +115,31 @@ _tui_draw_footer() {
   printf "${_TUI_GRAY}%s${_TUI_RESET}\n" "$help_text" >/dev/tty
 }
 
-# Render Modal Dialog Box
-# Usage: _tui_modal_box "Title" array_name
+# Render Modal Dialog Box with fixed neat width
 _tui_modal_box() {
   local title="$1"
   local -n _lines="$2"
+  local width=78
+  local inner_width=$((width - 4))
 
   _tui_clear
-  printf "${_TUI_CYAN}${_TUI_BOLD}┌─ [ %s ] %s┐${_TUI_RESET}\n" "$title" "─────────────────────────────────────────────────────────" >/dev/tty
+
+  local title_part="┌─[ $title ]"
+  local pad_len=$((width - ${#title_part} - 1))
+  local top_dashes=""
+  for ((d=0; d<pad_len; d++)); do top_dashes="${top_dashes}─"; done
+  printf "${_TUI_CYAN}${_TUI_BOLD}%s%s┐${_TUI_RESET}\n" "$title_part" "$top_dashes" >/dev/tty
 
   local line
   for line in "${_lines[@]}"; do
-    printf "${_TUI_CYAN}│${_TUI_RESET} %-70s ${_TUI_CYAN}│${_TUI_RESET}\n" "$line" >/dev/tty
+    printf "${_TUI_CYAN}│${_TUI_RESET} %-*.*s ${_TUI_CYAN}│${_TUI_RESET}\n" "$inner_width" "$inner_width" "$line" >/dev/tty
   done
 
-  printf "${_TUI_CYAN}├────────────────────────────────────────────────────────────────────────┤${_TUI_RESET}\n" >/dev/tty
-  printf "${_TUI_CYAN}│${_TUI_RESET} ${_TUI_GRAY}%-70s${_TUI_RESET} ${_TUI_CYAN}│${_TUI_RESET}\n" "  [Nhấn phím bất kỳ hoặc Esc/q để quay lại]" >/dev/tty
-  printf "${_TUI_CYAN}└────────────────────────────────────────────────────────────────────────┘${_TUI_RESET}\n" >/dev/tty
+  local div_dashes=""
+  for ((d=0; d<width-2; d++)); do div_dashes="${div_dashes}─"; done
+  printf "${_TUI_CYAN}├%s┤${_TUI_RESET}\n" "$div_dashes" >/dev/tty
+  printf "${_TUI_CYAN}│${_TUI_RESET} ${_TUI_GRAY}%-*.*s${_TUI_RESET} ${_TUI_CYAN}│${_TUI_RESET}\n" "$inner_width" "$inner_width" "  [Press any key or Esc/q to return]" >/dev/tty
+  printf "${_TUI_CYAN}└%s┘${_TUI_RESET}\n" "$div_dashes" >/dev/tty
 
   local dummy=""
   IFS= read -rsn1 dummy < /dev/tty 2>/dev/null || true
@@ -148,7 +156,6 @@ _tui_confirm_prompt() {
   local hint="[y/N]"
   [[ "$default_val" == "Y" || "$default_val" == "y" ]] && hint="[Y/n]"
 
-  # Temporarily restore normal terminal mode for line input
   printf "\033[?25h" >/dev/tty 2>/dev/null || true
   if [[ -n "${_TUI_ORIG_STTY:-}" ]]; then
     stty "$_TUI_ORIG_STTY" < /dev/tty 2>/dev/null || true
@@ -158,7 +165,6 @@ _tui_confirm_prompt() {
   printf "%s %s: " "$prompt_msg" "$hint" >/dev/tty
   IFS= read -r answer < /dev/tty || answer=""
 
-  # Re-enter raw mode if TUI was active
   if (( _TUI_IS_ACTIVE )); then
     stty -echo -icanon min 1 time 0 < /dev/tty 2>/dev/null || true
     printf "\033[?25l" >/dev/tty 2>/dev/null || true

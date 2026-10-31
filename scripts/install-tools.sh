@@ -40,14 +40,14 @@ fi
 
 # ==============================================================================
 # DECLARATIVE TOOL NOTEBOOK REGISTRY
-# format: cmd|apt_pkg|gh_repo|asset_template|bin_in_archive|version_cmd|desc|homepage
+# format: cmd|apt_pkg|gh_repo|asset_template|bin_in_archive|desc|homepage
 # ==============================================================================
 TOOL_NOTEBOOK=(
-  "git|git||||git --version 2>/dev/null | awk '{print \$3}'|Fast, distributed version control system|https://git-scm.com"
-  "curl|curl||||curl --version 2>/dev/null | awk 'NR==1{print \$2}'|Command line tool for transferring data with URLs|https://curl.se"
-  "jq|jq||||jq --version 2>/dev/null | sed 's/^jq-//'|Command-line JSON processor|https://jqlang.github.io/jq/"
-  "rg|ripgrep|BurntSushi/ripgrep|ripgrep_{ver}_{arch}-unknown-linux-musl.tar.gz|rg|rg --version 2>/dev/null | awk 'NR==1{print \$2}'|ripgrep line-oriented search tool|https://github.com/BurntSushi/ripgrep"
-  "lazygit|lazygit|jesseduffield/lazygit|lazygit_{ver}_Linux_{arch}.tar.gz|lazygit|lazygit --version 2>/dev/null | awk '{print \$6}'|Simple terminal UI for git commands|https://github.com/jesseduffield/lazygit"
+  "git|git||||Fast, distributed version control system|https://git-scm.com"
+  "curl|curl||||CLI tool for transferring data with URLs|https://curl.se"
+  "jq|jq||||Command-line JSON processor|https://jqlang.github.io/jq/"
+  "rg|ripgrep|BurntSushi/ripgrep|ripgrep_{ver}_{arch}-unknown-linux-musl.tar.gz|rg|ripgrep line-oriented search tool|https://github.com/BurntSushi/ripgrep"
+  "lazygit|lazygit|jesseduffield/lazygit|lazygit_{ver}_Linux_{arch}.tar.gz|lazygit|Simple terminal UI for git commands|https://github.com/jesseduffield/lazygit"
 )
 
 # CLI Options
@@ -70,6 +70,70 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+# Safe Single-Token Installed Version Extractor
+_get_tool_version() {
+  local cmd="$1"
+  case "$cmd" in
+    git)
+      git --version 2>/dev/null | awk '{print $3}'
+      ;;
+    curl)
+      curl --version 2>/dev/null | awk 'NR==1{print $2}'
+      ;;
+    jq)
+      jq --version 2>/dev/null | sed 's/^jq-//'
+      ;;
+    rg)
+      rg --version 2>/dev/null | awk 'NR==1{print $2}'
+      ;;
+    lazygit)
+      local lzv
+      lzv="$(lazygit --version 2>/dev/null | grep -Po 'version=\K[^,]+' || true)"
+      if [[ -n "$lzv" ]]; then
+        echo "$lzv"
+      else
+        lazygit --version 2>/dev/null | awk '{print $6}'
+      fi
+      ;;
+    delta)
+      delta --version 2>/dev/null | awk '{print $2}'
+      ;;
+    starship)
+      starship --version 2>/dev/null | awk 'NR==1{print $2}'
+      ;;
+    zoxide)
+      zoxide --version 2>/dev/null | awk '{print $2}'
+      ;;
+    *)
+      local raw
+      raw="$("$cmd" --version 2>/dev/null | head -n 1 || true)"
+      if [[ "$raw" =~ ([0-9]+\.[0-9]+(\.[0-9]+)?) ]]; then
+        echo "${BASH_REMATCH[1]}"
+      else
+        echo "ok"
+      fi
+      ;;
+  esac
+}
+
+# Fast Candidate Version from Local APT Cache (without network calls)
+_get_apt_candidate() {
+  local pkg="$1"
+  [[ -n "$pkg" ]] || return 1
+  has_apt || return 1
+  local cand
+  cand="$(apt-cache policy "$pkg" 2>/dev/null | grep -i "Candidate:" | awk '{print $2}' || true)"
+  if [[ -n "$cand" && "$cand" != "(none)" ]]; then
+    # Strip Debian epoch prefix and build suffixes (e.g., 1:2.47.3-0+deb13u1 -> 2.47.3)
+    cand="${cand#*:}"
+    cand="${cand%%-*}"
+    cand="${cand%%\+*}"
+    echo "$cand"
+    return 0
+  fi
+  return 1
+}
 
 # Hardware Architecture Normalization
 _get_arch() {
@@ -151,7 +215,6 @@ apt_pkgs=()
 gh_repos=()
 asset_fmts=()
 bin_names=()
-vcmds=()
 descs=()
 homepages=()
 
@@ -167,7 +230,6 @@ _refresh_inventory() {
   gh_repos=()
   asset_fmts=()
   bin_names=()
-  vcmds=()
   descs=()
   homepages=()
 
@@ -176,18 +238,17 @@ _refresh_inventory() {
   origins=()
   paths=()
 
-  local i def cmd apt_pkg gh_repo asset_fmt bin_name vcmd desc homepage
-  local origin_info origin_label path_val origin_type ver_str
+  local i def cmd apt_pkg gh_repo asset_fmt bin_name desc homepage
+  local origin_info origin_label path_val origin_type ver_str cand_str
 
   for ((i=0; i<item_count; i++)); do
     def="${TOOL_NOTEBOOK[i]}"
-    IFS='|' read -r cmd apt_pkg gh_repo asset_fmt bin_name vcmd desc homepage <<< "$def"
+    IFS='|' read -r cmd apt_pkg gh_repo asset_fmt bin_name desc homepage <<< "$def"
     cmds+=("$cmd")
     apt_pkgs+=("$apt_pkg")
     gh_repos+=("$gh_repo")
     asset_fmts+=("$asset_fmt")
     bin_names+=("${bin_name:-$cmd}")
-    vcmds+=("$vcmd")
     descs+=("$desc")
     homepages+=("$homepage")
 
@@ -198,11 +259,16 @@ _refresh_inventory() {
 
     if [[ "$origin_label" == "NONE" ]]; then
       statuses+=(0) # Not installed
-      versions+=("-")
+      cand_str="$(_get_apt_candidate "$apt_pkg" || true)"
+      if [[ -n "$cand_str" ]]; then
+        versions+=("($cand_str)")
+      else
+        versions+=("-")
+      fi
     else
       statuses+=(1) # Installed
-      ver_str="$(eval "$vcmd" 2>/dev/null || echo "ok")"
-      versions+=("${ver_str:-ok}")
+      ver_str="$(_get_tool_version "$cmd")"
+      versions+=("${ver_str:--}")
     fi
 
     # Maintain existing selection or default to unselected
@@ -275,12 +341,12 @@ _install_from_github() {
   local arch
   arch="$(_get_arch)"
 
-  printf "\n${_TUI_CYAN}==> Đang truy vấn phiên bản mới nhất từ GitHub (${repo})...${_TUI_RESET}\n" >/dev/tty
+  printf "\n${_TUI_CYAN}==> Querying latest release from GitHub (${repo})...${_TUI_RESET}\n" >/dev/tty
   local ver
   ver="$(_get_github_latest_ver "$repo")"
 
   if [[ "$ver" == "unknown" || -z "$ver" ]]; then
-    printf "${_TUI_RED}Lỗi: Không thể kết nối tới GitHub Releases để lấy phiên bản cho %s.${_TUI_RESET}\n" "$cmd" >/dev/tty
+    printf "${_TUI_RED}Error: Unable to connect to GitHub Releases to determine version for %s.${_TUI_RESET}\n" "$cmd" >/dev/tty
     return 1
   fi
 
@@ -291,24 +357,23 @@ _install_from_github() {
   asset_file="${asset_file//\{os\}/Linux}"
 
   local download_url="https://github.com/${repo}/releases/download/v${ver}/${asset_file}"
-  # Some repos don't prefix with 'v' in release download URL
   local target_dir="$HOME/.local/bin"
 
   # Display Transparency Card
   printf "\n${_TUI_GRAY}────────────────────────────────────────────────────────────────────────${_TUI_RESET}\n" >/dev/tty
-  printf "${_TUI_CYAN}${_TUI_BOLD} [THÔNG TIN CÀI ĐẶT PRE-BUILT BINARY CHÍNH CHỦ]${_TUI_RESET}\n" >/dev/tty
-  printf " • Công cụ       : %s (%s)\n" "$cmd" "$desc" >/dev/tty
-  printf " • Repository    : https://github.com/%s\n" "$repo" >/dev/tty
-  printf " • Release Page  : https://github.com/%s/releases\n" "$repo" >/dev/tty
-  printf " • Phiên bản     : v%s (Kiến trúc: %s)\n" "$ver" "$arch" >/dev/tty
-  printf " • File tải về   : %s\n" "$asset_file" >/dev/tty
-  printf " • URL chính xác : %s\n" "$download_url" >/dev/tty
-  printf " • Thư mục đích  : %s/%s ${_TUI_GREEN}(Không cần sudo, chỉ cho user này)${_TUI_RESET}\n" "$target_dir" "$cmd" >/dev/tty
+  printf "${_TUI_CYAN}${_TUI_BOLD} [OFFICIAL PRE-BUILT BINARY INSTALLATION]${_TUI_RESET}\n" >/dev/tty
+  printf " • Tool         : %s (%s)\n" "$cmd" "$desc" >/dev/tty
+  printf " • Repository   : https://github.com/%s\n" "$repo" >/dev/tty
+  printf " • Release Page : https://github.com/%s/releases\n" "$repo" >/dev/tty
+  printf " • Version      : v%s (Architecture: %s)\n" "$ver" "$arch" >/dev/tty
+  printf " • Asset File   : %s\n" "$asset_file" >/dev/tty
+  printf " • Exact URL    : %s\n" "$download_url" >/dev/tty
+  printf " • Target Path  : %s/%s ${_TUI_GREEN}(User-space, no sudo required)${_TUI_RESET}\n" "$target_dir" "$cmd" >/dev/tty
   printf "${_TUI_GRAY}────────────────────────────────────────────────────────────────────────${_TUI_RESET}\n" >/dev/tty
 
-  if ! _tui_confirm_prompt "Bạn có muốn tải và cài đặt binary từ nguồn GitHub trên không?" "N"; then
-    printf "${_TUI_YELLOW}[-] Đã bỏ qua cài đặt %s dạng binary.${_TUI_RESET}\n" "$cmd" >/dev/tty
-    printf "    Tài liệu hướng dẫn cài đặt thủ công: https://github.com/%s#installation\n" "$repo" >/dev/tty
+  if ! _tui_confirm_prompt "Do you want to download and install this binary from the official release above?" "N"; then
+    printf "${_TUI_YELLOW}[-] Skipped binary installation for %s.${_TUI_RESET}\n" "$cmd" >/dev/tty
+    printf "    Manual installation instructions: https://github.com/%s#installation\n" "$repo" >/dev/tty
     return 0
   fi
 
@@ -316,18 +381,17 @@ _install_from_github() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
 
-  printf "==> Đang tải %s...\n" "$download_url" >/dev/tty
+  printf "==> Downloading %s...\n" "$download_url" >/dev/tty
   if ! curl -sL --fail "$download_url" -o "$tmp_dir/$asset_file"; then
-    # Try without 'v' prefix in download url if failed
     local alt_url="https://github.com/${repo}/releases/download/${ver}/${asset_file}"
     if ! curl -sL --fail "$alt_url" -o "$tmp_dir/$asset_file"; then
-      printf "${_TUI_RED}Lỗi: Tải file thất bại từ cả hai URL:${_TUI_RESET}\n 1. %s\n 2. %s\n" "$download_url" "$alt_url" >/dev/tty
+      printf "${_TUI_RED}Error: Download failed from both candidate URLs:${_TUI_RESET}\n 1. %s\n 2. %s\n" "$download_url" "$alt_url" >/dev/tty
       rm -rf "$tmp_dir"
       return 1
     fi
   fi
 
-  printf "==> Đang giải nén và cài đặt vào %s/%s...\n" "$target_dir" "$cmd" >/dev/tty
+  printf "==> Extracting and installing to %s/%s...\n" "$target_dir" "$cmd" >/dev/tty
   if [[ "$asset_file" == *.tar.gz || "$asset_file" == *.tgz ]]; then
     tar -xzf "$tmp_dir/$asset_file" -C "$tmp_dir"
   elif [[ "$asset_file" == *.zip ]]; then
@@ -343,7 +407,7 @@ _install_from_github() {
   fi
 
   if [[ -z "$extracted_bin" || ! -f "$extracted_bin" ]]; then
-    printf "${_TUI_RED}Lỗi: Không tìm thấy file thực thi '%s' trong gói đã giải nén.${_TUI_RESET}\n" "$bin_name" >/dev/tty
+    printf "${_TUI_RED}Error: Executable '%s' not found inside extracted archive.${_TUI_RESET}\n" "$bin_name" >/dev/tty
     rm -rf "$tmp_dir"
     return 1
   fi
@@ -351,7 +415,7 @@ _install_from_github() {
   install -m 755 "$extracted_bin" "$target_dir/$cmd"
   rm -rf "$tmp_dir"
 
-  printf "${_TUI_GREEN}${_TUI_BOLD}✔ Cài đặt thành công %s v%s vào %s/%s${_TUI_RESET}\n" "$cmd" "$ver" "$target_dir" "$cmd" >/dev/tty
+  printf "${_TUI_GREEN}${_TUI_BOLD}✔ Successfully installed %s v%s to %s/%s${_TUI_RESET}\n" "$cmd" "$ver" "$target_dir" "$cmd" >/dev/tty
 }
 
 _action_install() {
@@ -377,17 +441,17 @@ _action_install() {
     elif [[ -n "$repo" ]]; then
       gh_queue+=("$idx")
     else
-      printf "${_TUI_RED}Gói '%s' không có trong APT và không có nguồn binary GitHub.${_TUI_RESET}\n" "$c" >/dev/tty
+      printf "${_TUI_RED}Package '%s' is not in APT and has no GitHub release source.${_TUI_RESET}\n" "$c" >/dev/tty
     fi
   done
 
   _tui_exit
 
-  # 1. Standard APT flow (asks sudo password naturally)
+  # 1. Standard APT flow (prompts sudo password naturally)
   if (( ${#apt_queue[@]} > 0 )); then
-    printf "\n${_TUI_CYAN}${_TUI_BOLD}=== CÀI ĐẶT QUA APT (HỆ THỐNG) ===${_TUI_RESET}\n"
-    printf "Các gói sẽ cài đặt: ${_TUI_GREEN}%s${_TUI_RESET}\n\n" "${apt_queue[*]}"
-    if _tui_confirm_prompt "Tiến hành chạy 'sudo apt update && sudo apt install'?" "Y"; then
+    printf "\n${_TUI_CYAN}${_TUI_BOLD}=== SYSTEM APT INSTALLATION ===${_TUI_RESET}\n"
+    printf "Packages to install via APT: ${_TUI_GREEN}%s${_TUI_RESET}\n\n" "${apt_queue[*]}"
+    if _tui_confirm_prompt "Proceed with 'sudo apt update && sudo apt install'?" "Y"; then
       sudo apt update && sudo apt install -y "${apt_queue[@]}"
     fi
   fi
@@ -399,7 +463,7 @@ _action_install() {
     done
   fi
 
-  printf "\n${_TUI_GRAY}Nhấn Enter để quay lại Sổ tay...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -419,7 +483,7 @@ _action_update() {
 
   for idx in "${target_indices[@]}"; do
     if (( statuses[idx] == 0 )); then
-      printf "${_TUI_YELLOW}Bỏ qua '%s' vì chưa được cài đặt.${_TUI_RESET}\n" "${cmds[idx]}"
+      printf "${_TUI_YELLOW}Skipping '%s' (not currently installed).${_TUI_RESET}\n" "${cmds[idx]}"
       continue
     fi
 
@@ -429,16 +493,16 @@ _action_update() {
     elif [[ "$orig" == *"github"* && -n "${gh_repos[idx]}" ]]; then
       _install_from_github "${cmds[idx]}" "${gh_repos[idx]}" "${asset_fmts[idx]}" "${bin_names[idx]}" "${descs[idx]}"
     else
-      printf "Công cụ '%s' thuộc nguồn '%s', không hỗ trợ tự động cập nhật.\n" "${cmds[idx]}" "$orig"
+      printf "Tool '%s' origin '%s' does not support automated updates.\n" "${cmds[idx]}" "$orig"
     fi
   done
 
   if (( ${#apt_updates[@]} > 0 )); then
-    printf "\n==> Cập nhật các gói APT: %s...\n" "${apt_updates[*]}"
+    printf "\n==> Updating APT packages: %s...\n" "${apt_updates[*]}"
     sudo apt update && sudo apt --only-upgrade install -y "${apt_updates[@]}"
   fi
 
-  printf "\n${_TUI_GRAY}Nhấn Enter để quay lại Sổ tay...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -460,7 +524,7 @@ _action_delete() {
 
   if (( ${#to_delete[@]} == 0 )); then
     _tui_exit
-    printf "\n${_TUI_YELLOW}Không có công cụ nào đã cài đặt được chọn để gỡ bỏ.${_TUI_RESET}\n"
+    printf "\n${_TUI_YELLOW}No installed tools selected for removal.${_TUI_RESET}\n"
     sleep 1.2
     _tui_enter
     return 0
@@ -470,11 +534,11 @@ _action_delete() {
   local delete_names=()
   for idx in "${to_delete[@]}"; do delete_names+=("${cmds[idx]}"); done
 
-  printf "\n${_TUI_RED}${_TUI_BOLD}=== XÁC NHẬN GỠ BỎ CÔNG CỤ ===${_TUI_RESET}\n"
-  printf "Các công cụ sau sẽ bị gỡ bỏ: ${_TUI_YELLOW}%s${_TUI_RESET}\n" "${delete_names[*]}"
+  printf "\n${_TUI_RED}${_TUI_BOLD}=== CONFIRM REMOVAL ===${_TUI_RESET}\n"
+  printf "The following tools will be uninstalled: ${_TUI_YELLOW}%s${_TUI_RESET}\n" "${delete_names[*]}"
 
-  if ! _tui_confirm_prompt "Bạn có chắc chắn muốn gỡ bỏ không?" "N"; then
-    printf "Đã hủy thao tác gỡ bỏ.\n"
+  if ! _tui_confirm_prompt "Are you sure you want to proceed?" "N"; then
+    printf "Removal cancelled.\n"
     sleep 1
     _tui_enter
     return 0
@@ -488,15 +552,15 @@ _action_delete() {
 
     if [[ "$orig" == *"github"* || "$p" == "$HOME/.local/bin/"* ]]; then
       rm -f "$p"
-      printf "${_TUI_GREEN}✔ Đã xóa binary người dùng: %s${_TUI_RESET}\n" "$p"
+      printf "${_TUI_GREEN}✔ Removed user binary: %s${_TUI_RESET}\n" "$p"
     elif [[ "$orig" == *"apt"* ]]; then
       sudo apt remove -y "$pkg"
     else
-      printf "${_TUI_YELLOW}Bỏ qua '%s': không thể gỡ tự động nguồn '%s'.${_TUI_RESET}\n" "$c" "$orig"
+      printf "${_TUI_YELLOW}Skipping '%s': unable to auto-remove origin '%s'.${_TUI_RESET}\n" "$c" "$orig"
     fi
   done
 
-  printf "\n${_TUI_GRAY}Nhấn Enter để quay lại Sổ tay...${_TUI_RESET}"
+  printf "\n${_TUI_GRAY}Press Enter to return to Notebook...${_TUI_RESET}"
   read -r _ </dev/tty || true
   _tui_enter
 }
@@ -510,25 +574,31 @@ _action_info() {
   (( statuses[idx] == 1 )) && s="INSTALLED"
   local v="${versions[idx]}"
   local o="${origins[idx]}"
+  [[ "$o" == "NONE" ]] && o="-"
   local p="${paths[idx]}"
-  local apt_avail="Không có trong kho Debian/Ubuntu hiện tại"
-  if _is_in_apt "${apt_pkgs[idx]}"; then
-    apt_avail="Có sẵn trong APT (${apt_pkgs[idx]})"
+
+  local apt_cand
+  apt_cand="$(_get_apt_candidate "${apt_pkgs[idx]}" || true)"
+  local apt_info="Not available in current APT repositories"
+  if [[ -n "$apt_cand" ]]; then
+    apt_info="Available in APT (${apt_pkgs[idx]} v$apt_cand)"
+  elif _is_in_apt "${apt_pkgs[idx]}"; then
+    apt_info="Available in APT (${apt_pkgs[idx]})"
   fi
 
   local lines=(
-    "Tên lệnh      : $c"
-    "Mô tả         : $d"
-    "Trạng thái    : $s"
-    "Phiên bản     : $v"
-    "Nguồn quản lý : $o"
-    "Đường dẫn cài : $p"
-    "Kho lưu APT   : $apt_avail"
-    "GitHub Repo   : ${gh_repos[idx]:-Không có (Native APT)}"
-    "Trang chủ     : $h"
+    "Command Name       : $c"
+    "Description        : $d"
+    "Status             : $s"
+    "Installed Version  : $v"
+    "Managed Origin     : $o"
+    "Binary Location    : $p"
+    "APT Repository     : $apt_info"
+    "GitHub Upstream    : ${gh_repos[idx]:-None (Native APT)}"
+    "Official Homepage  : $h"
   )
 
-  _tui_modal_box "HỒ SƠ CÔNG CỤ: $c" lines
+  _tui_modal_box "TOOL DOSSIER: $c" lines
 }
 
 # ==============================================================================
@@ -539,37 +609,37 @@ _tui_enter
 
 while true; do
   _tui_clear
-  _tui_draw_header "DOTFILES PACKAGE & TOOLS NOTEBOOK" "Sổ tay Quản lý & Cung ứng Công cụ Lập trình viên"
+  _tui_draw_header "DOTFILES PACKAGE & TOOLS NOTEBOOK" "Developer Tool Ledger & Provisioning Manager"
 
-  # Table Column Header
-  printf "   ${_TUI_BOLD}%-10s %-15s %-10s %-16s %s${_TUI_RESET}\n" "LỆNH" "TRẠNG THÁI" "PHIÊN BẢN" "NGUỒN CÀI" "MÔ TẢ" >/dev/tty
-  printf "   ${_TUI_GRAY}%-10s %-15s %-10s %-16s %s${_TUI_RESET}\n" "──────────" "───────────────" "──────────" "────────────────" "──────────────────────────────" >/dev/tty
+  # Table Column Header (Mathematically aligned with row columns)
+  printf "      %-10s %-13s %-10s %-15s %s\n" "COMMAND" "STATUS" "VERSION" "ORIGIN" "DESCRIPTION" >/dev/tty
+  printf "      %-10s %-13s %-10s %-15s %s\n" "───────" "──────" "───────" "──────" "───────────" >/dev/tty
 
   # Render Rows
   for ((i=0; i<item_count; i++)); do
     mark=" "
     (( selected[i] )) && mark="x"
 
-    status_str="${_TUI_GRAY}Not Installed${_TUI_RESET}"
     if (( statuses[i] )); then
-      status_str="${_TUI_GREEN}Installed${_TUI_RESET}    "
-    fi
-
-    ver_str="${versions[i]}"
-    origin_str="${origins[i]}"
-    [[ "$origin_str" == "NONE" ]] && origin_str="${_TUI_GRAY}-${_TUI_RESET}"
-
-    row_content="$(printf "[%s] %-8s %b %-10s %-16s %s" \
-      "$mark" "${cmds[i]}" "$status_str" "$ver_str" "$origin_str" "${descs[i]}")"
-
-    if (( i == cursor )); then
-      printf " ${_TUI_GREEN}${_TUI_BOLD}>${_TUI_RESET} %b\n" "$row_content" >/dev/tty
+      status_disp="${_TUI_GREEN}Installed    ${_TUI_RESET}"
     else
-      printf "   %b\n" "$row_content" >/dev/tty
+      status_disp="${_TUI_GRAY}Not Installed${_TUI_RESET}"
     fi
+
+    ver_disp="${versions[i]}"
+    orig_disp="${origins[i]}"
+    [[ "$orig_disp" == "NONE" ]] && orig_disp="${_TUI_GRAY}-${_TUI_RESET}"
+
+    prefix="  "
+    if (( i == cursor )); then
+      prefix="${_TUI_GREEN}${_TUI_BOLD}> ${_TUI_RESET}"
+    fi
+
+    printf "%b[%s] %-10s %b %-10s %-15s %s\n" \
+      "$prefix" "$mark" "${cmds[i]}" "$status_disp" "$ver_disp" "$orig_disp" "${descs[i]}" >/dev/tty
   done
 
-  _tui_draw_footer "[↑/↓] Di chuyển  [Space] Chọn  [a] Tất cả  [i/Enter] Cài đặt  [u] Cập nhật  [d] Gỡ bỏ  [?] Chi tiết  [q/Esc] Thoát"
+  _tui_draw_footer "[↑/↓, k/j] Navigate  [Space] Toggle  [a] Toggle All  [i/Enter] Install  [u] Update  [d] Remove  [?] Info  [q/Esc] Quit"
 
   action=""
   _tui_read_key action
@@ -615,4 +685,4 @@ while true; do
 done
 
 _tui_exit
-printf "\nĐã đóng Sổ tay Công cụ.\n"
+printf "\nClosed Tools Notebook.\n"
