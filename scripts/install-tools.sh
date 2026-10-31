@@ -651,7 +651,7 @@ while true; do
 
     ver_disp="${versions[i]}"
     orig_disp="${origins[i]}"
-    [[ "$orig_disp" == "NONE" ]] && orig_disp="${_TUI_GRAY}-${_TUI_RESET}"
+    [[ "$orig_disp" == "NONE" ]] && orig_disp="-"
 
     prefix="  "
     if (( i == cursor )); then
