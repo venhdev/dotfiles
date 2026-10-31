@@ -135,9 +135,7 @@ extract() {
   done
 }
 
-alias lsfunc='showfunc'
-
-showfunc() {
+lsfunc() {
   if (($# == 0)); then
     echo "Available functions:"
     declare -F |

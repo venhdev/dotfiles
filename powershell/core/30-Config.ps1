@@ -94,8 +94,6 @@ function set_editor {
     Write-Host "✓ Default EDITOR set and persisted to '$Name'" -ForegroundColor Green
 }
 
-Set-Alias -Name Set-Editor -Value set_editor -ErrorAction SilentlyContinue
-
 function conf {
     param(
         [Parameter(Position = 0)]

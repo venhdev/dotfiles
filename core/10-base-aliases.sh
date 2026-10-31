@@ -4,13 +4,6 @@
 alias rebash='exec bash'
 alias rezsh='exec zsh'
 alias insdf='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/install.sh"'
-alias instools='bash "${DOTFILES:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles}/scripts/install-tools.sh"'
-alias insssh='insdf ssh'
-alias inswsl='insdf wsl'
-alias insmobile='insdf mobile'
-alias insdocker='insdf docker'
-alias insai='insdf ai'
-alias insgit='insdf gitconfig'
 alias ts='date +%s'
 
 # PYTHON VENV
@@ -76,18 +69,16 @@ fi
 
 # PROCESS & SYSTEM MONITORING
 alias pg='ps aux | grep'
-topmem() {
+psmem() {
   local count="${1:-15}"
   [[ "$count" =~ ^[0-9]+$ ]] || count=15
   ps -eo pid,ppid,rss,%mem,cmd --sort=-rss | head -n "$((count + 1))"
 }
-topcpu() {
+pscpu() {
   local count="${1:-15}"
   [[ "$count" =~ ^[0-9]+$ ]] || count=15
   ps -eo pid,ppid,%cpu,%mem,cmd --sort=-%cpu | head -n "$((count + 1))"
 }
-alias psmem='topmem'
-alias pscpu='topcpu'
 
 # FILE & SYSTEM & NAVIGATION
 alias ..='cd ..'
@@ -179,8 +170,6 @@ dirsize() {
     printf "%s\n" "$raw_output" | awk "$awk_script"
   fi
 }
-ds() { dirsize "$@"; }
-alias ds='dirsize'
 # HISTORY SEARCH (POSIX: Bash & Zsh, default limit: 10)
 unalias h 2>/dev/null || true
 h() {
@@ -237,7 +226,6 @@ h() {
   fi
 }
 alias cls='clear'
-alias cl='clear'
 
 alias cx='chmod +x'
 alias chownme='sudo chown -R $USER:$USER'
@@ -249,9 +237,6 @@ alias lst4='tree -a -h -L 4'
 alias lst3='tree -a -h -L 3'
 alias lst2='tree -a -h -L 2'
 alias lst1='tree -a -h -L 1'
-alias lst='tree -a -h -L 1'
 
-alias dus='du -sh * | sort -h'
-alias dut='du -h --max-depth=1 . | sort -h'
 alias dfh='df -h'
 alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20'

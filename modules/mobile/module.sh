@@ -720,7 +720,6 @@ flsb() {
 
 sbr() { flsb release "$@"; }
 sbp() { flsb patch "$@"; }
-sb() { flsb "$@"; }
 
 if [[ -n "${BASH_VERSION:-}" ]] && command -v complete &>/dev/null; then
   _flsb_completions() {
@@ -733,5 +732,5 @@ if [[ -n "${BASH_VERSION:-}" ]] && command -v complete &>/dev/null; then
       COMPREPLY=($(compgen -W "-n --dry-run" -- "$cur"))
     fi
   }
-  complete -F _flsb_completions flsb sb 2>/dev/null || true
+  complete -F _flsb_completions flsb 2>/dev/null || true
 fi

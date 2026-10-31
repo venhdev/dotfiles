@@ -71,13 +71,13 @@ Re-runs the dotfiles installer to update the repository, configure shell profile
 - **On Windows (PowerShell)**: Executes `install.ps1` (or delegates to `install.sh` when specific modules are passed and `bash.exe` is present)
 
 Convenient module shortcuts:
-- `instools` → Install common CLI tools (git, curl, jq, rg)
-- `insssh` → Configure SSH agent and keys
-- `inswsl` → Configure WSL interop tools
-- `insmobile` → Configure Flutter, Shorebird, and Android ADB
-- `insdocker` → Configure Docker shortcuts
-- `insai` → Configure AI agent CLI helpers
-- `insgit` → Configure global Git aliases (`include.path`)
+- `insdf tools` → Install common CLI tools (git, curl, jq, rg)
+- `insdf ssh` → Configure SSH agent and keys
+- `insdf wsl` → Configure WSL interop tools
+- `insdf mobile` → Configure Flutter, Shorebird, and Android ADB
+- `insdf docker` → Configure Docker shortcuts
+- `insdf ai` → Configure AI agent CLI helpers
+- `insdf gitconfig` → Configure global Git aliases (`include.path`)
 
 ---
 
@@ -120,28 +120,28 @@ h "git commit" 3
 - `pathadd <dir> [prepend|append]` → Safely insert directory into `$PATH` (CWE-426 safe, no duplicates or empty `::` entries)
 - `ll` → Detailed file listing
 - `la` → Detailed file listing including hidden files
-- `cl` → Clear terminal screen
+- `cls` → Clear terminal screen
 
 ---
 
-### 📊 Directory Disk Usage: `dirsize` / `ds`
+### 📊 Directory Disk Usage: `dirsize`
 
-`🏷️ [Cross-Platform]` **`dirsize [path] [limit]`** (Alias: **`ds`**)
+`🏷️ [Cross-Platform]` **`dirsize [path] [limit]`**
 Fast subfolder storage analyzer listing immediate subdirectories sorted descending by disk space:
 - **Windows (PowerShell)**: High-speed multi-threaded Robocopy kernel scan (`/NFL /NDL /XJ /R:0 /W:0`) avoiding NTFS junction loops and deep `.NET` object allocation overhead. Auto-parallelized across 8 threads on PowerShell 7+.
 - **Linux / macOS (POSIX)**: High-speed `du` scan sorted numerically with automatic human-readable unit scaling (B, KB, MB, GB).
 
 ```bash
 # Analyze subdirectories in current working directory
-ds
+dirsize
 
 # Analyze a specific path
-ds D:\Develop
-ds /var/log
+dirsize D:\Develop
+dirsize /var/log
 
 # Limit output to top N largest folders
-ds 5
-ds /var/log 10
+dirsize 5
+dirsize /var/log 10
 ```
 
 ---
@@ -364,7 +364,7 @@ Global Git aliases configured via `include.path` (`~/.config/dotfiles/.gitconfig
 | `git swr <branch>` | Switch branch or auto-track remote branch if not present locally | `git swr feature-auth`<br>`git swr origin/feat-login` |
 | `git pf` | Safe force-push requiring lease and remote-state verification (`push --force-with-lease --force-if-includes`) | `git pf` |
 | `git sweep [target]` | Detect and remove merged and squash-merged feature branches against target (default: `main`) | `git sweep`<br>`git sweep develop` |
-| `git gwta` / `git gwtl` / `git gwtd` | Git worktree management shortcuts (add, list, delete) | `git gwta ../wt-feature feat`<br>`git gwtl` |
+| `git wt` / `git wta` / `git wtl` / `git wtd` | Git worktree management shortcuts (list, add, list, delete) | `git wt`<br>`git wta ../wt-feature feat`<br>`git wtd ../wt-feature` |
 | `git unstage [files]` | Remove files from staging area | `git unstage src/index.ts` |
 | `git undo` | Undo last commit while preserving staged changes | `git undo` |
 | `git br` | List branches | `git br -a` |
@@ -440,7 +440,7 @@ When the `docker` module is enabled:
 ## 11. AI & Coding Agent CLI Helpers
 
 When the `ai` module is enabled:
-- **`clpp`** / **`claudebypass`**: Launch Claude Code with auto-approved execution permissions (`--dangerously-skip-permissions`).
+- **`claudebypass`**: Launch Claude Code with auto-approved execution permissions (`--dangerously-skip-permissions`).
 - **`ski`**: Add skills using Skills CLI (`npx skills add`).
 - **`skiv`**: Add personal skill repository (`npx skills add venhdev/skills`).
 - **`skiu`**: Remove skills (`npx skills remove`).
@@ -457,7 +457,7 @@ dotfiles/
 ├── uninstall.sh                     # POSIX Uninstaller & Cleaner
 ├── core/                            # POSIX Shell Core (Linux, macOS, Git Bash)
 │   ├── 00-platform-lib.sh           # SSOT OS detection & shims (clip, open, pkg, rel)
-│   ├── 00-shell-lib.sh              # Shell utilities (_confirm, _log_cmd, showfunc, portss)
+│   ├── 00-shell-lib.sh              # Shell utilities (_confirm, _log_cmd, lsfunc, portss)
 │   ├── 10-base-aliases.sh           # Navigation, safe defaults, ports, and 'h' history search
 │   ├── 15-cmdlog-lib.sh             # Confirmed command audit log & rerun engine (clog, cr)
 │   ├── 20-editor-lib.sh             # Editor detection ($EDITOR) & picker (e, set_editor)

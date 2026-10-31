@@ -185,10 +185,6 @@ function dirsize {
 
     $sorted
 }
-Set-Alias -Name ds -Value dirsize -ErrorAction SilentlyContinue
-
-# Screen Clear
-Set-Alias -Name cl -Value Clear-Host -ErrorAction SilentlyContinue
 
 # Executable Path Lookup (equivalent to POSIX 'which')
 Set-Alias -Name which -Value where.exe -ErrorAction SilentlyContinue
@@ -413,11 +409,3 @@ function insdf {
         Write-Error "Dotfiles installer not found at $global:DOTFILES_DIR"
     }
 }
-
-function instools  { insdf tools }
-function insssh    { insdf ssh }
-function inswsl    { insdf wsl }
-function insmobile { insdf mobile }
-function insdocker { insdf docker }
-function insai     { insdf ai }
-function insgit    { insdf gitconfig }
