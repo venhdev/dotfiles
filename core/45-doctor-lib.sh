@@ -72,7 +72,7 @@ _zen_doctor() {
 
   local shell_hook_found=0
   for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    if [[ -f "$rc" ]] && grep -qE 'dotfiles.*core/00-platform-lib\.sh|dotfiles/install\.sh' "$rc" 2>/dev/null; then
+    if [[ -f "$rc" ]] && grep -qE '# Load (dotfiles|zen|Zen)|(dotfiles|zen)/core' "$rc" 2>/dev/null; then
       printf "  ${c_green}✔${c_reset} Active profile hook verified in: %s\n" "$rc"
       shell_hook_found=1
       ((pass_count++))
@@ -80,7 +80,7 @@ _zen_doctor() {
   done
 
   if (( ! shell_hook_found )); then
-    printf "  ${c_yellow}⚠${c_reset} No dotfiles loader hook detected in ~/.bashrc or ~/.zshrc\n"
+    printf "  ${c_yellow}⚠${c_reset} No shell loader hook detected in ~/.bashrc or ~/.zshrc\n"
     ((warn_count++))
   fi
 
@@ -88,11 +88,11 @@ _zen_doctor() {
   # [3/5] Managed Symlinks & Git Configuration
   # ----------------------------------------------------------------------------
   printf "\n${c_bold}[3/5] Managed Symlinks & Git Configuration${c_reset}\n"
-  if [[ -f "$HOME/.gitconfig" ]] && grep -q 'dotfiles' "$HOME/.gitconfig" 2>/dev/null; then
-    printf "  ${c_green}✔${c_reset} Global Git config includes dotfiles .gitconfig\n"
+  if [[ -f "$HOME/.gitconfig" ]] && grep -qE '(zen|dotfiles)/\.gitconfig' "$HOME/.gitconfig" 2>/dev/null; then
+    printf "  ${c_green}✔${c_reset} Global Git config includes Zen .gitconfig\n"
     ((pass_count++))
   else
-    printf "  ${c_yellow}⚠${c_reset} ~/.gitconfig does not reference dotfiles .gitconfig (Run 'zen setup git')\n"
+    printf "  ${c_yellow}⚠${c_reset} ~/.gitconfig does not reference Zen .gitconfig (Run 'zen setup git')\n"
     ((warn_count++))
   fi
 
