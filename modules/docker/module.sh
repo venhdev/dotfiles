@@ -1,9 +1,7 @@
-# Docker & DevOps shortcuts
+# DOCKER & DEVOPS SHORTCUTS
 
-alias dps='docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"'
-
-# Safe prune (images, containers, build cache) - preserves database volumes
-alias dcl='docker system prune -a'
+alias dps='docker ps --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"' # Formatted list of running docker containers
+alias dcl='docker system prune -a' # Prune unused containers, images, and networks
 
 # Interactive dangerous prune - requires confirmation before wiping volumes
 dcl_hard() {

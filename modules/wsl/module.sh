@@ -1,4 +1,4 @@
-# Windows / WSL helpers
+# WINDOWS & WSL HELPERS
 
 _default_win_dir="${_WIN_DIR:-/mnt/c/Windows}"
 [[ -d "/c/Windows" && -z "${_WIN_DIR:-}" ]] && _default_win_dir="/c/Windows"

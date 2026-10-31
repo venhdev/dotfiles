@@ -11,20 +11,20 @@ alias ts='date +%s'
 alias va='source .venv/bin/activate'
 alias vd='deactivate'
 
-# SYSTEM CONTROL & JOURNAL (enabled when systemctl is present)
+# SYSTEM CONTROL & JOURNAL
 if command -v systemctl &>/dev/null; then
-  alias sc='systemctl'
-  alias scu='systemctl --user'
-  alias scr='sudo systemctl restart'
-  alias scs='systemctl status'
-  alias sce='sudo systemctl enable --now'
-  alias scd='sudo systemctl disable --now'
-  alias scdr='sudo systemctl daemon-reload'
-  alias scedit='sudo systemctl edit --full'
+  alias sc='systemctl'                     # Control systemd system and service manager
+  alias scu='systemctl --user'             # Control user-level systemd services
+  alias scr='sudo systemctl restart'       # Restart a systemd service
+  alias scs='systemctl status'             # View detailed status of a service
+  alias sce='sudo systemctl enable --now'  # Enable and immediately start service
+  alias scd='sudo systemctl disable --now' # Disable and immediately stop service
+  alias scdr='sudo systemctl daemon-reload' # Reload systemd manager configuration
+  alias scedit='sudo systemctl edit --full' # Edit service unit configuration
 
-  alias jc='journalctl'
-  alias jcs='journalctl -u'
-  alias jcf='journalctl -f -u'
+  alias jc='journalctl'                    # Query and display systemd journal logs
+  alias jcs='journalctl -u'                # View journal logs for a specific unit
+  alias jcf='journalctl -f -u'             # Follow live journal logs for a unit
 fi
 
 # SECURITY & NETWORK CHECK
@@ -48,28 +48,28 @@ gete() {
   fi
 }
 
-# PACKAGE MANAGEMENT ALIASES (Apt on Debian/Ubuntu, or shims to universal zen)
+# PACKAGE MANAGEMENT ALIASES
 if command -v apt-get &>/dev/null; then
-  alias aupdate='sudo apt update'
-  alias aupgrade='sudo apt update && sudo apt upgrade -y'
-  alias ainstall='sudo apt install'
-  alias aremove='sudo apt remove'
-  alias asearch='apt search'
-  alias afix='sudo apt --fix-broken install'
+  alias aupdate='sudo apt update'                         # Fetch latest APT package lists
+  alias aupgrade='sudo apt update && sudo apt upgrade -y' # Upgrade all installed system packages
+  alias ainstall='sudo apt install'                       # Install package via APT
+  alias aremove='sudo apt remove'                         # Remove package via APT
+  alias asearch='apt search'                              # Search package archive
+  alias afix='sudo apt --fix-broken install'              # Fix broken package dependencies
   aautoremove() {
     sudo apt autoremove --dry-run
     _run_confirm sudo apt autoremove
   }
 else
-  alias aupdate='zen update'
-  alias aupgrade='zen upgrade'
-  alias ainstall='zen i'
-  alias aremove='zen rm'
-  alias asearch='zen search'
+  alias aupdate='zen update'                              # Update package index lists
+  alias aupgrade='zen upgrade'                            # Upgrade system packages
+  alias ainstall='zen i'                                  # Universal package install
+  alias aremove='zen rm'                                  # Universal package remove
+  alias asearch='zen search'                              # Search universal packages
 fi
 
 # PROCESS & SYSTEM MONITORING
-alias pg='ps aux | grep'
+alias pg='ps aux | grep' # Filter process table by pattern
 psmem() {
   local count="${1:-15}"
   [[ "$count" =~ ^[0-9]+$ ]] || count=15
@@ -82,15 +82,16 @@ pscpu() {
 }
 
 # FILE & SYSTEM & NAVIGATION
-alias ..='cd ..'
-alias ...='cd ../..'
-alias ll='ls -haltF' # Long list, hidden files, human sizes
-alias la='ls -A'
-alias l='ls -CF'
-alias lsize='ls -lSrh' # Sort by size, largest at bottom
+alias ..='cd ..'       # Navigate up one directory level
+alias ...='cd ../..'   # Navigate up two directory levels
+alias ll='ls -haltF'   # Long listing with hidden files and human sizes
+alias la='ls -A'       # List almost all files (excludes . and ..)
+alias l='ls -CF'       # Compact column list with classification markers
+alias lsize='ls -lSrh' # Sort by size ascending (largest at bottom)
 
-# DIRECTORY DISK USAGE (POSIX: Linux, macOS, WSL, default limit: none)
+# DIRECTORY DISK USAGE
 unalias ds 2>/dev/null || true
+unalias dus 2>/dev/null || true
 unalias dirsize 2>/dev/null || true
 dirsize() {
   local target="."
@@ -171,8 +172,12 @@ dirsize() {
     printf "%s\n" "$raw_output" | awk "$awk_script"
   fi
 }
-# HISTORY SEARCH (POSIX: Bash & Zsh, default limit: 10)
+alias dus='dirsize' # Human-readable directory disk usage sorted by size
+alias ds='dirsize'  # Compact alias for dirsize
+
+# HISTORY SEARCH
 unalias h 2>/dev/null || true
+unalias hs 2>/dev/null || true
 h() {
   local query=""
   local limit=10
@@ -226,21 +231,23 @@ h() {
       tail -n "$limit" | awk '{printf " \033[0;90m%2d)\033[0m %s\n", NR, $0}'
   fi
 }
-alias cls='clear'
+alias hs='h' # History search with limit
 
-alias cx='chmod +x'
-alias chownme='sudo chown -R $USER:$USER'
+# FILE & SYSTEM UTILITIES
+alias cls='clear'                                                    # Clear terminal screen
+alias cx='chmod +x'                                                  # Grant executable permission
+alias chownme='sudo chown -R $USER:$USER'                            # Reclaim user ownership of path
 
-alias rm='rm -i'
-alias rmf='rm -rf'
+alias rm='rm -i'                                                     # Interactive safe file removal
+alias rmf='rm -rf'                                                   # Force recursive file/folder removal
 
-alias lst4='tree -a -h -L 4'
-alias lst3='tree -a -h -L 3'
-alias lst2='tree -a -h -L 2'
-alias lst1='tree -a -h -L 1'
+alias lst4='tree -a -h -L 4'                                         # Tree view 4 levels deep
+alias lst3='tree -a -h -L 3'                                         # Tree view 3 levels deep
+alias lst2='tree -a -h -L 2'                                         # Tree view 2 levels deep
+alias lst1='tree -a -h -L 1'                                         # Tree view 1 level deep
 
-alias dfh='df -h'
-alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20'
+alias dfh='df -h'                                                    # Human-readable filesystem disk space
+alias bigfiles='find . -type f -exec du -h {} + | sort -hr | head -20' # Top 20 largest files in tree
 
-alias lg='lazygit'
+alias lg='lazygit'                                                   # Launch lazygit terminal UI
 

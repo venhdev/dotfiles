@@ -1,8 +1,8 @@
-# Mobile development helpers (ADB, Flutter, Shorebird)
+# MOBILE DEVELOPMENT HELPERS
 
 # --- Android keystore helpers ---
 
-alias debugkey='keytool -list -v -keystore "${HOME}/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android'
+alias debugkey='keytool -list -v -keystore "${HOME}/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android' # Print Android debug keystore SHA fingerprints
 
 # --- ADB helpers ---
 

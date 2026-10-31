@@ -1,11 +1,10 @@
-# AI & Agent CLI helpers (Claude, Skills, OpenClaw)
+# AI & AGENT CLI HELPERS
+alias claudebypass='claude --dangerously-skip-permissions' # Run Claude CLI bypassing permissions prompt
 
-alias claudebypass='claude --dangerously-skip-permissions'
+alias ski='npx skills add'                                # Install agent skill
+alias skiv='npx skills add venhdev/skills'                # Install venhdev community skills
+alias skiu='npx skills remove'                            # Remove agent skill
 
-alias ski='npx skills add'
-alias skiv='npx skills add venhdev/skills'
-alias skiu='npx skills remove'
-
-alias pn='pnpm'
-alias ocwatch='pn openclaw setup && pn gateway:watch'
-alias ocstop='pn openclaw gateway stop'
+alias pn='pnpm'                                           # Fast package manager shortcut
+alias ocwatch='pn openclaw setup && pn gateway:watch'     # Setup and start OpenClaw gateway
+alias ocstop='pn openclaw gateway stop'                   # Stop active OpenClaw gateway

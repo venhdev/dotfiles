@@ -1,4 +1,4 @@
-# SSH helpers and agent management
+# SSH & AGENT MANAGEMENT
 
 SSH_INIT="${DOTFILES_SSH_INIT:-}"
 
